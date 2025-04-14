@@ -1,0 +1,20 @@
+.{
+    .name = .firmware,
+    .version = "0.0.0",
+    .fingerprint = 0xd5ecd7c4f035c8b9, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.14.0",
+    .dependencies = .{
+        .microzig = .{ .path = "../../microzig" },
+    },
+    // .dependencies = .{
+    //     .microzig = .{
+    //         .url = "https://microzig.tech/downloads/microzig/0.13.2/microzig.tar.gz",
+    //         .hash = "microzig-0.13.2-AAAAAEAoCACJtVQID09BdlBX63hCLqdwobnQC5A_1QfO",
+    //     },
+    // },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
