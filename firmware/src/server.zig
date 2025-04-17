@@ -7,7 +7,7 @@ const Place = struct { lat: f64, long: f64 };
 const Person = struct { name: []u8, phone: []u8 };
 const Insured = struct { id: []u8, name: []u8 };
 
-pub fn main() !void {
+pub fn main_old() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
     var pool = pg.Pool.init(gpa.allocator(), .{ .size = 5, .connect = .{

@@ -32,27 +32,14 @@ pub fn main() !void {
         .clock_config = rp2xxx.clock_config,
     });
 
-    var i: i32 = 1;
     while (true) {
-        const j = job{
-            .rpm = 300,
-            .steps = i,
-            .microstep = 16,
-        };
-
-        i += 1;
-        if (i == 100) {
-            i = 0;
-        }
-
-        const data = std.mem.asBytes(&j);
-
-        uart.write_blocking(data, null) catch {
+        var data: []u8 = undefined;
+        uart.read_blocking(data, null) catch {
             uart.clear_errors();
             continue;
         };
 
-        led.toggle();
-        ptime.sleep_ms(500);
+        const j = std.mem.bytesToValue(job, data[0..13]);
+        led.put(@intCast(@mod(j.steps, 2)));
     }
 }
