@@ -30,6 +30,9 @@ pub fn main() !void {
     led.set_direction(.out);
     led.put(1);
 
+    var core1_stack: [1024]u32 = undefined;
+    multicore.launch_core1_with_stack(recv, &core1_stack);
+
     inline for (&.{ uart_tx_pin, uart_rx_pin }) |pin| {
         pin.set_function(.uart);
     }
@@ -39,80 +42,29 @@ pub fn main() !void {
         .clock_config = rp2xxx.clock_config,
     });
 
-    multicore.launch_core1(recv);
-
-    var cd = ClockDevice{};
-    const dir_pin = gpio.num(14);
-    dir_pin.set_function(.sio);
-    var dp = GPIO_Device.init(dir_pin);
-    const step_pin = gpio.num(15);
-    step_pin.set_function(.sio);
-    var sp = GPIO_Device.init(step_pin);
-    const ms1_pin = gpio.num(2);
-    const ms2_pin = gpio.num(3);
-    const ms3_pin = gpio.num(4);
-    ms1_pin.set_function(.sio);
-    ms2_pin.set_function(.sio);
-    ms3_pin.set_function(.sio);
-    var ms1 = GPIO_Device.init(ms1_pin);
-    var ms2 = GPIO_Device.init(ms2_pin);
-    var ms3 = GPIO_Device.init(ms3_pin);
-
-    const opts = stepper_driver.Stepper_Options{
-        .dir_pin = dp.digital_io(),
-        .step_pin = sp.digital_io(),
-        .ms1_pin = ms1.digital_io(),
-        .ms2_pin = ms2.digital_io(),
-        .ms3_pin = ms3.digital_io(),
-        .clock_device = cd.clock_device(),
-    };
-
-    var stepper = A4988.init(opts);
-    try stepper.begin(300, 16);
-
-    const constant_profile = stepper_driver.Speed_Profile.constant_speed;
-    //const linear_profile = stepper_driver.Speed_Profile{ .linear_speed = .{ .accel = 8000, .decel = 8000 } };
-
-    stepper.set_speed_profile(constant_profile);
-
+    var buf: [13]u8 = .{0} ** 13;
     while (true) {
-        const i = multicore.fifo.read_blocking();
-        //stepper.set_rpm(x[i].rpm);
-        //_ = try stepper.set_microstep(x[i].microstep);
-        try stepper.move(x[i].steps);
-    }
-}
-
-pub fn recv() void {
-    var data: [13]u8 = undefined;
-    var i: i32 = 1;
-    while (true) {
-        uart.read_blocking(&data, null) catch {
+        uart.read_blocking(&buf, null) catch {
             // You need to clear UART errors before making a new transaction
             uart.clear_errors();
+            blink(10);
             continue;
         };
 
-        x[0] = job{ .steps = 2000 * i, .rpm = 400 };
-        multicore.fifo.write(0);
-        //time.sleep_ms(5000);
-        i *= -1;
-        led.toggle();
+        x[0] = std.mem.bytesToValue(job, buf[0..13]);
+        multicore.fifo.write_blocking(0);
+        buf = .{0} ** 13;
     }
 }
 
-pub fn uart_init() void {}
-
-pub fn stepper_init() stepper_driver.Stepper_Options {
+fn recv() void {
     var cd = ClockDevice{};
     const dir_pin = gpio.num(14);
     dir_pin.set_function(.sio);
     var dp = GPIO_Device.init(dir_pin);
-
     const step_pin = gpio.num(15);
     step_pin.set_function(.sio);
     var sp = GPIO_Device.init(step_pin);
-
     const ms1_pin = gpio.num(2);
     const ms2_pin = gpio.num(3);
     const ms3_pin = gpio.num(4);
@@ -123,12 +75,40 @@ pub fn stepper_init() stepper_driver.Stepper_Options {
     var ms2 = GPIO_Device.init(ms2_pin);
     var ms3 = GPIO_Device.init(ms3_pin);
 
-    return stepper_driver.Stepper_Options{
+    var stepper = A4988.init(.{
         .dir_pin = dp.digital_io(),
         .step_pin = sp.digital_io(),
         .ms1_pin = ms1.digital_io(),
         .ms2_pin = ms2.digital_io(),
         .ms3_pin = ms3.digital_io(),
         .clock_device = cd.clock_device(),
+    });
+
+    stepper.begin(300, 16) catch {
+        blink(100);
+        return;
     };
+
+    const constant_profile = stepper_driver.Speed_Profile.constant_speed;
+    //const linear_profile = stepper_driver.Speed_Profile{ .linear_speed = .{ .accel = 8000, .decel = 8000 } };
+    stepper.set_speed_profile(constant_profile);
+
+    blink(50);
+
+    while (true) {
+        const i = multicore.fifo.read_blocking();
+        led.toggle();
+        //stepper.set_rpm(x[i].rpm);
+        //_ = try stepper.set_microstep(x[i].microstep);
+        stepper.move(x[i].steps) catch {
+            blink(20);
+        };
+    }
+}
+
+fn blink(n: usize) void {
+    for (0..n) |_| {
+        led.toggle();
+        time.sleep_ms(50);
+    }
 }

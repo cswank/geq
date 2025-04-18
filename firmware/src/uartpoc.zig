@@ -22,6 +22,7 @@ pub fn main() !void {
     led.set_function(.sio);
     led.set_direction(.out);
     led.put(1);
+    blink();
 
     inline for (&.{ uart_tx_pin, uart_rx_pin }) |pin| {
         pin.set_function(.uart);
@@ -32,14 +33,23 @@ pub fn main() !void {
         .clock_config = rp2xxx.clock_config,
     });
 
+    var buf: [13]u8 = .{0} ** 13;
     while (true) {
-        var data: []u8 = undefined;
-        uart.read_blocking(data, null) catch {
+        uart.read_blocking(&buf, null) catch {
             uart.clear_errors();
+            blink();
             continue;
         };
 
-        const j = std.mem.bytesToValue(job, data[0..13]);
+        const j = std.mem.bytesToValue(job, buf[0..13]);
         led.put(@intCast(@mod(j.steps, 2)));
+        buf = .{0} ** 13;
+    }
+}
+
+fn blink() void {
+    for (0..10) |_| {
+        led.toggle();
+        ptime.sleep_ms(50);
     }
 }

@@ -22,6 +22,7 @@ pub fn main() !void {
     led.set_function(.sio);
     led.set_direction(.out);
     led.put(1);
+    blink();
 
     inline for (&.{ uart_tx_pin, uart_rx_pin }) |pin| {
         pin.set_function(.uart);
@@ -36,23 +37,28 @@ pub fn main() !void {
     while (true) {
         const j = job{
             .rpm = 300,
-            .steps = i,
+            .steps = 10000 * i,
             .microstep = 16,
         };
 
-        i += 1;
-        if (i == 100) {
-            i = 0;
-        }
+        i *= -1;
 
         const data = std.mem.asBytes(&j);
 
-        uart.write_blocking(data, null) catch {
+        uart.write_blocking(data[0..13], null) catch {
             uart.clear_errors();
+            blink();
             continue;
         };
 
         led.toggle();
-        ptime.sleep_ms(500);
+        ptime.sleep_ms(5000);
+    }
+}
+
+fn blink() void {
+    for (0..10) |_| {
+        led.toggle();
+        ptime.sleep_ms(50);
     }
 }

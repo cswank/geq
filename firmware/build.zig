@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
         //.optimize = .ReleaseSmall,
         .optimize = optimize,
         //.root_source_file = b.path("src/motor.zig"),
-        .root_source_file = b.path("src/uartpoc.zig"),
+        .root_source_file = b.path("src/motor.zig"),
     });
 
     // We call this twice to demonstrate that the default binary output for
