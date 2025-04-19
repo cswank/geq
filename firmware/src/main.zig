@@ -34,16 +34,22 @@ pub fn main() !void {
     });
 
     var i: i32 = 1;
+    var j: f64 = 0;
+    const rpm: f64 = 400;
     while (true) {
-        const j = job{
-            .rpm = 300,
+        const jb = job{
+            .rpm = rpm - (25 * j),
             .steps = 10000 * i,
             .microstep = 16,
         };
 
         i *= -1;
+        j += 1;
+        if (j == 16) {
+            j = 0;
+        }
 
-        const data = std.mem.asBytes(&j);
+        const data = std.mem.asBytes(&jb);
 
         uart.write_blocking(data[0..13], null) catch {
             uart.clear_errors();
