@@ -20,7 +20,6 @@ const uart_rx_pin = gpio.num(1);
 pub const motor = packed struct {
     rpm: f64,
     steps: i32,
-    microstep: u8 = 16,
 };
 
 pub const job = packed struct {
@@ -89,7 +88,7 @@ pub fn main() !void {
     //const linear_profile = stepper_driver.Speed_Profile{ .linear_speed = .{ .accel = 8000, .decel = 8000 } };
     stepper.set_speed_profile(constant_profile);
 
-    var buf: [26]u8 = .{0} ** 26;
+    var buf: [24]u8 = .{0} ** 24;
     var i: u8 = 0;
 
     multicore.fifo.drain();
@@ -104,13 +103,11 @@ pub fn main() !void {
 
         //std.log.info("buf {X}", .{buf});
 
-        const jb = std.mem.bytesToValue(job, buf[0..26]);
+        const jb = std.mem.bytesToValue(job, buf[0..24]);
         x[i] = jb.m2;
         multicore.fifo.write_blocking(i);
-        buf = .{0} ** 26;
 
         stepper.set_rpm(jb.m1.rpm);
-        _ = try stepper.set_microstep(x[i].microstep);
         stepper.move(jb.m1.steps) catch {};
 
         i += 1;
@@ -167,7 +164,6 @@ fn motor_2() void {
 
         led.toggle();
         stepper.set_rpm(m2.rpm);
-        //_ = stepper.set_microstep(x[i].microstep) catch 0;
         stepper.move(m2.steps) catch {};
     }
 }
