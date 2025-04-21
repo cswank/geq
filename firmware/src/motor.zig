@@ -1,18 +1,18 @@
 const std = @import("std");
 const microzig = @import("microzig");
 
-const time = rp2xxx.time;
-const rp2xxx = microzig.hal;
-const gpio = rp2xxx.gpio;
+const rp2040 = microzig.hal;
+const time = rp2040.time;
+const gpio = rp2040.gpio;
 const led = gpio.num(25);
 
-const GPIO_Device = rp2xxx.drivers.GPIO_Device;
-const ClockDevice = rp2xxx.drivers.ClockDevice;
+const GPIO_Device = rp2040.drivers.GPIO_Device;
+const ClockDevice = rp2040.drivers.ClockDevice;
 const sd = microzig.drivers.stepper;
 const A4988 = sd.A4988;
-const mc = rp2xxx.multicore;
+const mc = rp2040.multicore;
 
-const uart = rp2xxx.uart.instance.num(0);
+const uart = rp2040.uart.instance.num(0);
 const baud_rate = 115200;
 const uart_tx_pin = gpio.num(0);
 const uart_rx_pin = gpio.num(1);
@@ -20,73 +20,77 @@ const uart_rx_pin = gpio.num(1);
 const m1_pins = stepper_pins{ .dir = 27, .step = 26, .ms1 = 10, .ms2 = 11, .ms3 = 12 };
 const m2_pins = stepper_pins{ .dir = 14, .step = 15, .ms1 = 2, .ms2 = 3, .ms3 = 4 };
 
+var core1_stack: [1024]u32 = undefined;
+
 pub const motor = packed struct {
     rpm: f64,
     steps: i32,
 };
 
-pub const job = packed struct {
+pub const command = packed struct {
     m1: motor,
     m2: motor,
 };
 
 pub const microzig_options = microzig.Options{
     .log_level = .debug,
-    .logFn = rp2xxx.uart.logFn,
+    .logFn = rp2040.uart.logFn,
 };
 
-var jobs: [3]motor = undefined;
+var commands: [4]motor = undefined;
 
 pub fn main() !void {
     init();
 
-    var stack: [900]u32 = undefined;
-    mc.launch_core1_with_stack(motor_2, &stack);
-
     var stepper = Stepper.init(m1_pins);
     try stepper.start();
 
-    blink(20);
+    blink(10);
 
     var buf: [24]u8 = .{0} ** 24;
-    var i: u3 = 0;
+    var i: u2 = 0;
     while (true) {
-        uart.read_blocking(&buf, null) catch {
-            uart.clear_errors();
-            blink(10);
+        const cmd = recv(i, &buf) catch {
             continue;
         };
 
-        led.toggle();
-
-        const jb = std.mem.bytesToValue(job, buf[0..24]);
-        jobs[i] = jb.m2;
-        mc.fifo.write_blocking(i);
-        stepper.set_rpm(jb.m1.rpm);
-        stepper.move(jb.m1.steps) catch {
-            blink(10);
+        stepper.set_rpm(cmd.m1.rpm);
+        stepper.move(cmd.m1.steps) catch {
+            sos();
         };
 
-        i += 1;
-        if (i == 3) {
-            i = 0;
-        }
+        i +%= 1;
     }
+}
+
+fn recv(i: u2, buf: []u8) !command {
+    uart.read_blocking(buf, null) catch |err| {
+        uart.clear_errors();
+        sos();
+        return err;
+    };
+
+    led.toggle();
+
+    const cmd = std.mem.bytesToValue(command, buf[0..24]);
+    commands[i] = cmd.m2;
+    mc.fifo.write_blocking(i);
+    return cmd;
 }
 
 fn motor_2() void {
     var stepper = Stepper.init(m2_pins);
     stepper.start() catch {
-        blink(100);
+        sos();
         return;
     };
 
     while (true) {
         const i = mc.fifo.read_blocking();
-        const m2 = jobs[i];
+        const m2 = commands[i];
         stepper.set_rpm(m2.rpm);
         stepper.move(m2.steps) catch {
-            blink(100);
+            sos();
         };
     }
 }
@@ -96,22 +100,32 @@ fn init() void {
     led.set_direction(.out);
     led.put(1);
 
-    inline for (&.{ uart_tx_pin, uart_rx_pin }) |pin| {
-        pin.set_function(.uart);
+    uart_tx_pin.set_function(.uart);
+    uart_rx_pin.set_function(.uart);
+    uart.apply(.{ .baud_rate = baud_rate, .clock_config = rp2040.clock_config });
+
+    rp2040.uart.init_logger(uart);
+
+    mc.launch_core1_with_stack(motor_2, &core1_stack);
+}
+
+fn sos() void {
+    for (0..4) |_| {
+        _blink(3, 100);
+        _blink(3, 200);
+        _blink(3, 100);
+        time.sleep_ms(200);
     }
-
-    uart.apply(.{
-        .baud_rate = baud_rate,
-        .clock_config = rp2xxx.clock_config,
-    });
-
-    rp2xxx.uart.init_logger(uart);
 }
 
 fn blink(n: usize) void {
-    for (0..n) |_| {
+    _blink(n, 50);
+}
+
+fn _blink(n: usize, d: u32) void {
+    for (0..n + 1) |_| {
         led.toggle();
-        time.sleep_ms(50);
+        time.sleep_ms(d);
     }
 }
 
