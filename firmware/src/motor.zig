@@ -35,78 +35,32 @@ pub const microzig_options = microzig.Options{
 var x: [3]motor = undefined;
 
 pub fn main() !void {
-    led.set_function(.sio);
-    led.set_direction(.out);
-    led.put(1);
+    init();
 
     var core1_stack: [900]u32 = undefined;
     multicore.launch_core1_with_stack(motor_2, &core1_stack);
+    multicore.fifo.drain();
 
-    inline for (&.{ uart_tx_pin, uart_rx_pin }) |pin| {
-        pin.set_function(.uart);
-    }
+    var stepper = Stepper.init(.{ .dir = 17, .step = 16, .ms1 = 21, .ms2 = 20, .ms3 = 19 });
+    stepper.start();
 
-    uart.apply(.{
-        .baud_rate = baud_rate,
-        .clock_config = rp2xxx.clock_config,
-    });
-
-    rp2xxx.uart.init_logger(uart);
-
-    var cd = ClockDevice{};
-    const dir_pin = gpio.num(17);
-    dir_pin.set_function(.sio);
-    var dp = GPIO_Device.init(dir_pin);
-    const step_pin = gpio.num(16);
-    step_pin.set_function(.sio);
-    var sp = GPIO_Device.init(step_pin);
-    const ms1_pin = gpio.num(21);
-    const ms2_pin = gpio.num(20);
-    const ms3_pin = gpio.num(19);
-    ms1_pin.set_function(.sio);
-    ms2_pin.set_function(.sio);
-    ms3_pin.set_function(.sio);
-    var ms1 = GPIO_Device.init(ms1_pin);
-    var ms2 = GPIO_Device.init(ms2_pin);
-    var ms3 = GPIO_Device.init(ms3_pin);
-
-    var stepper = A4988.init(.{
-        .dir_pin = dp.digital_io(),
-        .step_pin = sp.digital_io(),
-        .ms1_pin = ms1.digital_io(),
-        .ms2_pin = ms2.digital_io(),
-        .ms3_pin = ms3.digital_io(),
-        .clock_device = cd.clock_device(),
-    });
-
-    stepper.begin(300, 16) catch {
-        blink(100);
-        return;
-    };
-
-    const constant_profile = stepper_driver.Speed_Profile.constant_speed;
-    //const linear_profile = stepper_driver.Speed_Profile{ .linear_speed = .{ .accel = 8000, .decel = 8000 } };
-    stepper.set_speed_profile(constant_profile);
+    blink(20);
 
     var buf: [24]u8 = .{0} ** 24;
     var i: u8 = 0;
 
-    multicore.fifo.drain();
-
     while (true) {
         uart.read_blocking(&buf, null) catch {
-            // You need to clear UART errors before making a new transaction
             uart.clear_errors();
             blink(10);
             continue;
         };
 
-        //std.log.info("buf {X}", .{buf});
+        std.log.debug("{x}", .{buf});
 
         const jb = std.mem.bytesToValue(job, buf[0..24]);
         x[i] = jb.m2;
         multicore.fifo.write_blocking(i);
-
         stepper.set_rpm(jb.m1.rpm);
         stepper.move(jb.m1.steps) catch {};
 
@@ -118,54 +72,35 @@ pub fn main() !void {
 }
 
 fn motor_2() void {
-    var cd = ClockDevice{};
-    const dir_pin = gpio.num(14);
-    dir_pin.set_function(.sio);
-    var dp = GPIO_Device.init(dir_pin);
-    const step_pin = gpio.num(15);
-    step_pin.set_function(.sio);
-    var sp = GPIO_Device.init(step_pin);
-    const ms1_pin = gpio.num(2);
-    const ms2_pin = gpio.num(3);
-    const ms3_pin = gpio.num(4);
-    ms1_pin.set_function(.sio);
-    ms2_pin.set_function(.sio);
-    ms3_pin.set_function(.sio);
-    var ms1 = GPIO_Device.init(ms1_pin);
-    var ms2 = GPIO_Device.init(ms2_pin);
-    var ms3 = GPIO_Device.init(ms3_pin);
-
-    var stepper = A4988.init(.{
-        .dir_pin = dp.digital_io(),
-        .step_pin = sp.digital_io(),
-        .ms1_pin = ms1.digital_io(),
-        .ms2_pin = ms2.digital_io(),
-        .ms3_pin = ms3.digital_io(),
-        .clock_device = cd.clock_device(),
-    });
-
-    //std.log.info("stepper type: {}", .{@TypeOf(stepper)});
-
-    stepper.begin(300, 16) catch {
-        blink(100);
-        return;
-    };
-
-    const constant_profile = stepper_driver.Speed_Profile.constant_speed;
-    //const linear_profile = stepper_driver.Speed_Profile{ .linear_speed = .{ .accel = 8000, .decel = 8000 } };
-    stepper.set_speed_profile(constant_profile);
-
-    blink(50);
+    var stepper = Stepper.init(.{ .dir = 14, .step = 15, .ms1 = 2, .ms2 = 3, .ms3 = 4 });
+    stepper.start();
 
     while (true) {
         const i = multicore.fifo.read_blocking();
-        std.log.info("index: {d}", .{i});
         const m2 = x[i];
-
         led.toggle();
         stepper.set_rpm(m2.rpm);
-        stepper.move(m2.steps) catch {};
+        stepper.move(m2.steps) catch {
+            blink(100);
+        };
     }
+}
+
+fn init() void {
+    led.set_function(.sio);
+    led.set_direction(.out);
+    led.put(1);
+
+    inline for (&.{ uart_tx_pin, uart_rx_pin }) |pin| {
+        pin.set_function(.uart);
+    }
+
+    uart.apply(.{
+        .baud_rate = baud_rate,
+        .clock_config = rp2xxx.clock_config,
+    });
+
+    rp2xxx.uart.init_logger(uart);
 }
 
 fn blink(n: usize) void {
@@ -174,3 +109,75 @@ fn blink(n: usize) void {
         time.sleep_ms(50);
     }
 }
+
+const Pins = struct {
+    dir: gpio.Pin,
+    step: gpio.Pin,
+    ms1: gpio.Pin,
+    ms2: gpio.Pin,
+    ms3: gpio.Pin,
+};
+
+const Stepper = struct {
+    pins: Pins,
+    cd: ClockDevice,
+    dir: GPIO_Device = undefined,
+    step: GPIO_Device = undefined,
+    ms1: GPIO_Device = undefined,
+    ms2: GPIO_Device = undefined,
+    ms3: GPIO_Device = undefined,
+    stepper: stepper_driver.Stepper(stepper_driver.A4988) = undefined,
+
+    pub fn init(p: struct { dir: u6, step: u6, ms1: u6, ms2: u6, ms3: u6 }) Stepper {
+        var pins = Pins{
+            .dir = gpio.num(p.dir),
+            .step = gpio.num(p.step),
+            .ms1 = gpio.num(p.ms1),
+            .ms2 = gpio.num(p.ms2),
+            .ms3 = gpio.num(p.ms3),
+        };
+
+        pins.dir.set_function(.sio);
+        pins.step.set_function(.sio);
+        pins.ms1.set_function(.sio);
+        pins.ms2.set_function(.sio);
+        pins.ms3.set_function(.sio);
+
+        var self = Stepper{
+            .pins = pins,
+            .cd = ClockDevice{},
+        };
+
+        self.dir = GPIO_Device.init(self.pins.dir);
+        self.step = GPIO_Device.init(self.pins.step);
+        self.ms1 = GPIO_Device.init(self.pins.ms1);
+        self.ms2 = GPIO_Device.init(self.pins.ms2);
+        self.ms3 = GPIO_Device.init(self.pins.ms3);
+
+        return self;
+    }
+
+    pub fn start(self: *Stepper) void {
+        self.stepper = A4988.init(.{
+            .dir_pin = self.dir.digital_io(),
+            .step_pin = self.step.digital_io(),
+            .ms1_pin = self.ms1.digital_io(),
+            .ms2_pin = self.ms2.digital_io(),
+            .ms3_pin = self.ms3.digital_io(),
+            .clock_device = self.cd.clock_device(),
+        });
+
+        self.stepper.set_speed_profile(stepper_driver.Speed_Profile.constant_speed);
+        self.stepper.begin(300, 16) catch {
+            blink(100);
+        };
+    }
+
+    pub fn set_rpm(self: *Stepper, rpm: f64) void {
+        self.stepper.set_rpm(rpm);
+    }
+
+    pub fn move(self: *Stepper, steps: i32) !void {
+        try self.stepper.move(steps);
+    }
+};
