@@ -55,8 +55,9 @@ func main() {
 		}
 	}()
 
+	var buf bytes.Buffer
+
 	for {
-		var buf bytes.Buffer
 		jb := job{
 			M1: motor{
 				RPM:       rpm[j%2],
@@ -76,6 +77,7 @@ func main() {
 			j = 0
 		}
 
+		buf.Reset()
 		binary.Write(&buf, binary.LittleEndian, jb)
 
 		data := buf.Bytes()
