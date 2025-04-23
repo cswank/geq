@@ -14,8 +14,10 @@
       {
         devShells.default = mkShell {
           buildInputs = [
-            # These dependencies are required for building tinygo (go install).
-            sqlite3
+            sqlite
+            gnumake
+            pkgsCross.muslpi.buildPackages.gcc
+            gcc-
           ];
         };
       }

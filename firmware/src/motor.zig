@@ -22,6 +22,8 @@ const m2_pins = stepper_pins{ .dir = 14, .step = 15, .ms1 = 2, .ms2 = 3, .ms3 = 
 
 var core1_stack: [1024]u32 = undefined;
 
+var stop: bool = false;
+
 pub const motor = packed struct {
     rpm: f64,
     steps: i32,
@@ -30,6 +32,7 @@ pub const motor = packed struct {
 pub const command = packed struct {
     m1: motor,
     m2: motor,
+    stop: u8,
 };
 
 pub const microzig_options = microzig.Options{
@@ -46,8 +49,9 @@ pub fn main() !void {
     try stepper.start();
 
     blink(10);
+    led.put(1);
 
-    var buf: [24]u8 = .{0} ** 24;
+    var buf: [25]u8 = .{0} ** 25;
     var i: u2 = 0;
     while (true) {
         const cmd = recv(i, &buf) catch {
@@ -72,9 +76,17 @@ fn recv(i: u2, buf: []u8) !command {
 
     led.toggle();
 
-    const cmd = std.mem.bytesToValue(command, buf[0..24]);
-    commands[i] = cmd.m2;
-    mc.fifo.write_blocking(i);
+    std.log.debug("{X}", .{buf});
+
+    const cmd = std.mem.bytesToValue(command, buf[0..]);
+    if (cmd.stop != 0) {
+        stop = true;
+    } else {
+        stop = false;
+        commands[i] = cmd.m2;
+        mc.fifo.write_blocking(i);
+    }
+
     return cmd;
 }
 
@@ -193,6 +205,12 @@ const Stepper = struct {
     }
 
     pub fn move(self: *Stepper, steps: i32) !void {
-        try self.stepper.move(steps);
+        var i: i32 = 0;
+        self.stepper.start_move(steps);
+        var more: bool = true;
+        while (more and !stop) {
+            more = try self.stepper.next_action();
+            i +%= 1;
+        }
     }
 };
