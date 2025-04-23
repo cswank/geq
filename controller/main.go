@@ -11,14 +11,14 @@ import (
 )
 
 type motor struct {
-	RPM       float64
-	Steps     int32
-	Microstep uint8
+	RPM   float64
+	Steps int32
 }
 
 type job struct {
-	M1 motor
-	M2 motor
+	M1   motor
+	M2   motor
+	Stop bool
 }
 
 func main() {
@@ -57,24 +57,28 @@ func main() {
 
 	var buf bytes.Buffer
 
-	for {
+	var stop bool
+
+	for !stop {
 		jb := job{
 			M1: motor{
-				RPM:       rpm[j%2],
-				Steps:     1000 * i,
-				Microstep: 16,
+				RPM:   rpm[j%2],
+				Steps: 100000 * i,
 			},
 			M2: motor{
-				RPM:       rpm[j%2],
-				Steps:     10000 * i,
-				Microstep: 16,
+				RPM:   rpm[j%2],
+				Steps: 100000 * i,
 			},
+			Stop: stop,
 		}
 
 		i *= -1
 		j += 1
-		if j == 16 {
+		if j == 1 {
 			j = 0
+			stop = true
+		} else {
+			stop = false
 		}
 
 		buf.Reset()
@@ -82,7 +86,7 @@ func main() {
 
 		data := buf.Bytes()
 
-		fmt.Printf("%X\n", data)
+		fmt.Printf("%b\n", data)
 
 		_, err = port.Write(data)
 		if err != nil {
