@@ -56,8 +56,8 @@ func main() {
 		StopBits: serial.OneStopBit,
 	}
 
-	//port, err := serial.Open("/dev/serial0", mode)
-	port, err := serial.Open("/dev/ttyUSB0", mode)
+	port, err := serial.Open("/dev/serial0", mode)
+	//port, err := serial.Open("/dev/ttyUSB0", mode)
 	if err != nil {
 		log.Fatalf("unable to open serial port: %s", err)
 	}
@@ -103,6 +103,7 @@ func main() {
 		id := r.PathValue("id")
 		fmt.Fprintf(w, "handling task with id=%v\n", id)
 		var buf bytes.Buffer
+
 		j := job{
 			M2: motor{
 				RPM:   100,
