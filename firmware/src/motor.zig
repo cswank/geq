@@ -25,14 +25,14 @@ var core1_stack: [1024]u32 = undefined;
 var stop: bool = false;
 
 pub const motor = packed struct {
-    rpm: f64,
-    steps: i32,
+    rpm: f64 = 0,
+    steps: i32 = 0,
 };
 
 pub const command = packed struct {
     m1: motor,
     m2: motor,
-    stop: u8,
+    stop: u8 = 0,
 };
 
 pub const microzig_options = microzig.Options{

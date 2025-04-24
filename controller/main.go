@@ -9,6 +9,8 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"strconv"
+	"strings"
 
 	_ "github.com/glebarez/go-sqlite"
 
@@ -40,7 +42,7 @@ type (
 )
 
 var (
-	lat, lon, jd float64
+	lat, lon float64
 )
 
 func main() {
@@ -105,6 +107,10 @@ func main() {
 		var buf bytes.Buffer
 
 		j := job{
+			M1: motor{
+				RPM:   0,
+				Steps: 0,
+			},
 			M2: motor{
 				RPM:   100,
 				Steps: 10000,
@@ -122,12 +128,11 @@ func main() {
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
-
 }
 
-func raDecToAltAz(ra, dec float64) (float64, float64, float64, float64) {
+func raDecToAltAz(ra, dec, ts, lat, lon float64) (float64, float64, float64, float64) {
 	//Meeus 13.5 and 13.6, modified so West longitudes are negative and 0 is North
-	gmst := greenwichMeanSiderealTime(jd)
+	gmst := greenwichMeanSiderealTime(julian(ts))
 	localSiderealTime := math.Mod(gmst+lon, 2*math.Pi)
 
 	H := (localSiderealTime - ra)
@@ -161,6 +166,10 @@ func greenwichMeanSiderealTime(jd float64) float64 {
 	return gmst
 }
 
+func julian(ts float64) float64 {
+	return (ts / 86400.0) + 2440587.5
+}
+
 func earthRotationAngle(jd float64) float64 {
 	//IERS Technical Note No. 32
 	t := jd - 2451545.0
@@ -173,4 +182,83 @@ func earthRotationAngle(jd float64) float64 {
 	}
 
 	return theta
+}
+
+func dmsToDeg(s string, maxDeg float64) (float64, error) {
+	var negDir = "s"
+	if maxDeg == 180 {
+		negDir = "w"
+	}
+
+	degs, mins, secs, dirs, err := splitCoord(s)
+	if err != nil {
+		return 0, err
+	}
+
+	deg, min, sec, err := parseFloats(degs, mins, secs)
+	if err != nil {
+		return 0, err
+	}
+
+	if deg > maxDeg {
+		return 0, fmt.Errorf("invalid coordinate %f, degrees must be less than or equal to %f", deg, maxDeg)
+	}
+
+	if min >= 60 {
+		return 0, fmt.Errorf("invalid coordinate minutes %f, must be less than 60", min)
+	}
+
+	if sec >= 60 {
+		return 0, fmt.Errorf("invalid coordinate seconds %f, must be less than 60", sec)
+	}
+
+	dec := deg + min/60.0 + sec/3600.0
+	if strings.ToLower(dirs) == negDir {
+		dec = -dec
+	}
+
+	return dec, nil
+}
+
+func parseFloats(degs, mins, secs string) (float64, float64, float64, error) {
+	deg, err := strconv.ParseFloat(degs, 64)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	min, err := strconv.ParseFloat(mins, 64)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("Cannot parse minutes %s: %s", mins, err)
+	}
+
+	sec, err := strconv.ParseFloat(secs, 64)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("Cannot parse seconds %s: %s", secs, err)
+	}
+
+	return deg, min, sec, nil
+}
+
+func splitFn(r rune) bool {
+	return r == '°' || r == '\'' || r == '"'
+}
+
+// splitCoord spits degrees, minutes, seconds and direction
+func splitCoord(s string) (string, string, string, string, error) {
+	s = strings.TrimSpace(s)
+	matches := strings.FieldsFunc(s, splitFn)
+	if len(matches) < 3 {
+		return "", "", "", "", fmt.Errorf("Cannot parse 'HDMS' string: %s", s)
+	}
+
+	var dir string
+	if len(matches) == 4 {
+		dir = strings.ToLower(strings.TrimSpace(matches[3]))
+	}
+
+	return strings.TrimSpace(matches[0]),
+		strings.TrimSpace(matches[1]),
+		strings.TrimSpace(matches[2]),
+		dir,
+		nil
 }
