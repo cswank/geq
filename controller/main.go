@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	_ "github.com/glebarez/go-sqlite"
 
 	"go.bug.st/serial"
@@ -43,85 +45,51 @@ type (
 
 var (
 	lat, lon float64
+	db       *sql.DB
+	port     serial.Port
+
+	dev = kingpin.Arg("device", "serial device").String()
 )
 
 func main() {
-	db, err := sql.Open("sqlite", "./messier.db")
+	kingpin.Parse()
+
+	var err error
+	db, err = sql.Open("sqlite", "./messier.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	mode := &serial.Mode{
-		BaudRate: 115200,
-		DataBits: 8,
-		Parity:   serial.NoParity,
-		StopBits: serial.OneStopBit,
-	}
-
-	port, err := serial.Open("/dev/serial0", mode)
-	//port, err := serial.Open("/dev/ttyUSB0", mode)
-	if err != nil {
-		log.Fatalf("unable to open serial port: %s", err)
-	}
-
-	defer port.Close()
-
-	go func() {
-		for {
-			lg := make([]byte, 1024)
-			n, err := port.Read(lg)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(string(lg[:n]))
+	if *dev != "" {
+		mode := &serial.Mode{
+			BaudRate: 115200,
+			DataBits: 8,
+			Parity:   serial.NoParity,
+			StopBits: serial.OneStopBit,
 		}
-	}()
+
+		port, err = serial.Open(*dev, mode)
+		if err != nil {
+			log.Fatalf("unable to open serial port: %s", err)
+		}
+		defer port.Close()
+
+		go func() {
+			for {
+				lg := make([]byte, 1024)
+				n, err := port.Read(lg)
+				if err != nil {
+					log.Fatal(err)
+				}
+				fmt.Println(string(lg[:n]))
+			}
+		}()
+	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /objects/", func(w http.ResponseWriter, r *http.Request) {
-		q := fmt.Sprintf("%%%s%%", r.URL.Query().Get("search"))
-		rows, err := db.Query("SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier WHERE name LIKE ?", q)
-		if err != nil {
-			fmt.Fprint(w, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		objs := []object{}
-		for rows.Next() {
-			var o object
-			if err := rows.Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprint(w, err)
-				return
-			}
-			objs = append(objs, o)
-		}
-
-		json.NewEncoder(w).Encode(objs)
-	})
-
-	mux.HandleFunc("GET /objects/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		fmt.Fprintf(w, "handling task with id=%v\n", id)
-		var buf bytes.Buffer
-
-		j := job{
-			M1: motor{
-				RPM:   0,
-				Steps: 0,
-			},
-			M2: motor{
-				RPM:   100,
-				Steps: 10000,
-			},
-		}
-
-		binary.Write(&buf, binary.LittleEndian, j)
-		d := buf.Bytes()
-		log.Printf("%x", d)
-		port.Write(d)
-	})
+	mux.HandleFunc("GET /objects", getObjects)
+	mux.HandleFunc("GET /objects/{id}", getObject)
+	mux.HandleFunc("POST /objects/{id}", gotoObject)
 
 	fmt.Println("Server is running on port 8080")
 	err = http.ListenAndServe(":8080", mux)
@@ -130,7 +98,107 @@ func main() {
 	}
 }
 
-func raDecToAltAz(ra, dec, ts, lat, lon float64) (float64, float64, float64, float64) {
+func getObjects(w http.ResponseWriter, r *http.Request) {
+	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier%s"
+	var clause string
+	var args []any
+	if s := r.URL.Query().Get("search"); s != "" {
+		clause = " WHERE name LIKE ?"
+		args = append(args, fmt.Sprintf("%%%s%%", s))
+	}
+
+	rows, err := db.Query(fmt.Sprintf(q, clause), args...)
+	if err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	objs := []object{}
+	for rows.Next() {
+		var o object
+		if err := rows.Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, err)
+			return
+		}
+		objs = append(objs, o)
+	}
+
+	json.NewEncoder(w).Encode(objs)
+}
+
+func getObject(w http.ResponseWriter, r *http.Request) {
+	obj, err := doGetObject(r.PathValue("id"))
+	if err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(obj)
+}
+
+func gotoObject(w http.ResponseWriter, r *http.Request) {
+	obj, err := doGetObject(r.PathValue("id"))
+	if err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	az, alt, lsrt, H, err := raDecToAltAz(obj.RA, obj.Decl, float64(time.Now().Unix()), lat, lon)
+	if err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if port == nil {
+		fmt.Fprintf(w, "az: %f, alt: %f, lsrt: %f, H: %f\n", az, alt, lsrt, H)
+		return
+	}
+
+	//TODO: make 2 jobs: GOTO and then track
+	j := job{
+		M1: motor{
+			RPM:   1,
+			Steps: 0,
+		},
+		M2: motor{
+			RPM:   100,
+			Steps: 10000,
+		},
+	}
+
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.LittleEndian, j)
+	d := buf.Bytes()
+	log.Printf("%x", d)
+	port.Write(d)
+}
+
+func doGetObject(ids string) (object, error) {
+	id, err := strconv.Atoi(ids)
+	if err != nil {
+		return object{}, err
+	}
+
+	var o object
+	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier WHERE m = ?"
+	return o, db.QueryRow(q, id).Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
+}
+
+func raDecToAltAz(ras, decs string, ts, lat, lon float64) (float64, float64, float64, float64, error) {
+	ra, err := hm(ras)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	dec, err := dm(decs)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
 	//Meeus 13.5 and 13.6, modified so West longitudes are negative and 0 is North
 	gmst := greenwichMeanSiderealTime(julian(ts))
 	localSiderealTime := math.Mod(gmst+lon, 2*math.Pi)
@@ -150,7 +218,7 @@ func raDecToAltAz(ra, dec, ts, lat, lon float64) (float64, float64, float64, flo
 	if az < 0 {
 		az += 2 * math.Pi
 	}
-	return az, a, localSiderealTime, H
+	return az, a, localSiderealTime, H, nil
 }
 
 func greenwichMeanSiderealTime(jd float64) float64 {
@@ -184,81 +252,70 @@ func earthRotationAngle(jd float64) float64 {
 	return theta
 }
 
-func dmsToDeg(s string, maxDeg float64) (float64, error) {
-	var negDir = "s"
-	if maxDeg == 180 {
-		negDir = "w"
+//12:26.2
+func hm(s string) (float64, error) {
+	return dm(s)
+}
+
+// +12:57
+func dm(s string) (float64, error) {
+	var i float64
+	if strings.HasPrefix(s, "+") {
+		s = s[1:]
+		i = 1
+	} else if strings.HasPrefix(s, "-") {
+		s = s[1:]
+		i = -1
 	}
 
-	degs, mins, secs, dirs, err := splitCoord(s)
+	ss, err := splitCoord(s)
 	if err != nil {
 		return 0, err
 	}
-
-	deg, min, sec, err := parseFloats(degs, mins, secs)
+	f, err := parseFloats(ss[0], ss[1])
 	if err != nil {
 		return 0, err
 	}
+	dec := f[0] + f[1]/60.0
+	return dec * i, nil
+}
 
-	if deg > maxDeg {
-		return 0, fmt.Errorf("invalid coordinate %f, degrees must be less than or equal to %f", deg, maxDeg)
+func dms(s string) (float64, error) {
+	ss, err := splitCoord(s)
+	if err != nil {
+		return 0, err
 	}
-
-	if min >= 60 {
-		return 0, fmt.Errorf("invalid coordinate minutes %f, must be less than 60", min)
+	f, err := parseFloats(ss[0], ss[1])
+	if err != nil {
+		return 0, err
 	}
-
-	if sec >= 60 {
-		return 0, fmt.Errorf("invalid coordinate seconds %f, must be less than 60", sec)
-	}
-
-	dec := deg + min/60.0 + sec/3600.0
-	if strings.ToLower(dirs) == negDir {
-		dec = -dec
-	}
-
+	dec := f[0] + f[1]/60.0 + f[2]/3600.0
 	return dec, nil
 }
 
-func parseFloats(degs, mins, secs string) (float64, float64, float64, error) {
-	deg, err := strconv.ParseFloat(degs, 64)
-	if err != nil {
-		return 0, 0, 0, err
+func parseFloats(in ...string) ([]float64, error) {
+	out := make([]float64, len(in))
+	for i, s := range in {
+		d, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = d
 	}
 
-	min, err := strconv.ParseFloat(mins, 64)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("Cannot parse minutes %s: %s", mins, err)
-	}
-
-	sec, err := strconv.ParseFloat(secs, 64)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("Cannot parse seconds %s: %s", secs, err)
-	}
-
-	return deg, min, sec, nil
+	return out, nil
 }
 
-func splitFn(r rune) bool {
-	return r == '°' || r == '\'' || r == '"'
-}
-
-// splitCoord spits degrees, minutes, seconds and direction
-func splitCoord(s string) (string, string, string, string, error) {
+func splitCoord(s string) ([]string, error) {
 	s = strings.TrimSpace(s)
-	matches := strings.FieldsFunc(s, splitFn)
-	if len(matches) < 3 {
-		return "", "", "", "", fmt.Errorf("Cannot parse 'HDMS' string: %s", s)
+	matches := strings.Split(s, ":")
+	if len(matches) < 2 {
+		return nil, fmt.Errorf("Cannot parse 'HDM' string: %s", s)
 	}
 
-	var dir string
-	if len(matches) == 4 {
-		dir = strings.ToLower(strings.TrimSpace(matches[3]))
+	for i, m := range matches {
+		matches[i] = strings.TrimSpace(m)
 	}
 
-	return strings.TrimSpace(matches[0]),
-		strings.TrimSpace(matches[1]),
-		strings.TrimSpace(matches[2]),
-		dir,
-		nil
+	return matches, nil
 }
