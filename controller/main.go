@@ -7,16 +7,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/alecthomas/kingpin/v2"
 	_ "github.com/glebarez/go-sqlite"
-
 	"go.bug.st/serial"
+
+	"periph.io/x/conn/v3/driver/driverreg"
+	"periph.io/x/conn/v3/physic"
+	"periph.io/x/conn/v3/spi"
+	"periph.io/x/conn/v3/spi/spireg"
+	"periph.io/x/host/v3"
 )
 
 type (
@@ -46,9 +49,9 @@ type (
 var (
 	lat, lon float64
 	db       *sql.DB
-	port     serial.Port
 
-	dev = kingpin.Arg("device", "serial device").String()
+	dev  = kingpin.Arg("device", "serial device").String()
+	port spi.Conn
 )
 
 func main() {
@@ -68,7 +71,7 @@ func main() {
 			StopBits: serial.OneStopBit,
 		}
 
-		port, err = serial.Open(*dev, mode)
+		port, err := serial.Open(*dev, mode)
 		if err != nil {
 			log.Fatalf("unable to open serial port: %s", err)
 		}
@@ -84,6 +87,26 @@ func main() {
 				fmt.Println(string(lg[:n]))
 			}
 		}()
+	}
+
+	if _, err := host.Init(); err != nil {
+		log.Fatalf("host init: %s", err)
+	}
+
+	if _, err := driverreg.Init(); err != nil {
+		log.Fatalf("driverreg init: %s", err)
+	}
+
+	p, err := spireg.Open("/dev/spidev0.0")
+	if err != nil {
+		log.Fatalf("spi open: %s", err)
+	}
+
+	defer p.Close()
+
+	port, err = p.Connect(physic.MegaHertz, spi.Mode3, 8)
+	if err != nil {
+		log.Fatalf("spi connect: %s", err)
 	}
 
 	mux := http.NewServeMux()
@@ -147,27 +170,31 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	az, alt, lsrt, H, err := raDecToAltAz(obj.RA, obj.Decl, float64(time.Now().Unix()), lat, lon)
+	ra, err := hm(obj.RA)
 	if err != nil {
 		fmt.Fprint(w, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if port == nil {
-		fmt.Fprintf(w, "az: %f, alt: %f, lsrt: %f, H: %f\n", az, alt, lsrt, H)
+	decl, err := dm(obj.Decl)
+	if err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("ra: %d, decl: %d", steps(ra), steps(decl))
 
 	//TODO: make 2 jobs: GOTO and then track
 	j := job{
 		M1: motor{
-			RPM:   1,
-			Steps: 0,
+			RPM:   400,
+			Steps: steps(ra),
 		},
 		M2: motor{
-			RPM:   100,
-			Steps: 10000,
+			RPM:   400,
+			Steps: steps(decl),
 		},
 	}
 
@@ -175,7 +202,19 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 	binary.Write(&buf, binary.LittleEndian, j)
 	d := buf.Bytes()
 	log.Printf("%x", d)
-	port.Write(d)
+
+	// Write 0x10 to the device, and read a byte right after.
+	write := append(d, 0x00)
+	read := make([]byte, len(d)+1)
+	if err := port.Tx(write, read); err != nil {
+		log.Fatal(err)
+	}
+	// Use read.
+	fmt.Printf("spi read: %v\n", read[1:])
+}
+
+func steps(d float64) int32 {
+	return int32(d * 500 * 16)
 }
 
 func doGetObject(ids string) (object, error) {
@@ -187,69 +226,6 @@ func doGetObject(ids string) (object, error) {
 	var o object
 	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier WHERE m = ?"
 	return o, db.QueryRow(q, id).Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
-}
-
-func raDecToAltAz(ras, decs string, ts, lat, lon float64) (float64, float64, float64, float64, error) {
-	ra, err := hm(ras)
-	if err != nil {
-		return 0, 0, 0, 0, err
-	}
-	dec, err := dm(decs)
-	if err != nil {
-		return 0, 0, 0, 0, err
-	}
-
-	//Meeus 13.5 and 13.6, modified so West longitudes are negative and 0 is North
-	gmst := greenwichMeanSiderealTime(julian(ts))
-	localSiderealTime := math.Mod(gmst+lon, 2*math.Pi)
-
-	H := (localSiderealTime - ra)
-	if H < 0 {
-		H += 2 * math.Pi
-	}
-	if H > math.Pi {
-		H = H - 2*math.Pi
-	}
-
-	az := (math.Atan2(math.Sin(H), math.Cos(H)*math.Sin(lat)-math.Tan(dec)*math.Cos(lat)))
-	a := (math.Asin(math.Sin(lat)*math.Sin(dec) + math.Cos(lat)*math.Cos(dec)*math.Cos(H)))
-	az -= math.Pi
-
-	if az < 0 {
-		az += 2 * math.Pi
-	}
-	return az, a, localSiderealTime, H, nil
-}
-
-func greenwichMeanSiderealTime(jd float64) float64 {
-	//"Expressions for IAU 2000 precession quantities" N. Capitaine1,P.T.Wallace2, and J. Chapront
-	t := (jd - 2451545.0) / 36525.0
-
-	gmst := earthRotationAngle(jd) + (0.014506+4612.156534*t+1.3915817*t*t-0.00000044*t*t*t-0.000029956*t*t*t*t-0.0000000368*t*t*t*t*t)/60.0/60.0*math.Pi/180.0 //eq 42
-	gmst = math.Mod(gmst, 2*math.Pi)
-	if gmst < 0 {
-		gmst += 2 * math.Pi
-	}
-
-	return gmst
-}
-
-func julian(ts float64) float64 {
-	return (ts / 86400.0) + 2440587.5
-}
-
-func earthRotationAngle(jd float64) float64 {
-	//IERS Technical Note No. 32
-	t := jd - 2451545.0
-	f := math.Mod(jd, 1.0)
-
-	theta := 2 * math.Pi * (f + 0.7790572732640 + 0.00273781191135448*t) //eq 14
-	theta = math.Mod(theta, 2*math.Pi)
-	if theta < 0 {
-		theta += 2 * math.Pi
-	}
-
-	return theta
 }
 
 //12:26.2

@@ -6,11 +6,13 @@ require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/glebarez/go-sqlite v1.22.0
 	go.bug.st/serial v1.6.4
+	periph.io/x/conn/v3 v3.7.2
+	periph.io/x/host/v3 v3.8.5
 )
 
 require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
-	github.com/creack/goselect v0.1.3 // indirect
+	github.com/creack/goselect v0.1.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
