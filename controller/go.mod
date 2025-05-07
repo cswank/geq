@@ -4,10 +4,9 @@ go 1.24.1
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
+	github.com/cswank/tmc2209 v0.0.0-00010101000000-000000000000
 	github.com/glebarez/go-sqlite v1.22.0
 	go.bug.st/serial v1.6.4
-	periph.io/x/conn/v3 v3.7.2
-	periph.io/x/host/v3 v3.8.5
 )
 
 require (
@@ -24,3 +23,5 @@ require (
 	modernc.org/memory v1.7.2 // indirect
 	modernc.org/sqlite v1.28.0 // indirect
 )
+
+replace github.com/cswank/tmc2209 => /home/craig/Projects/tmc2209

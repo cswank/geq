@@ -1,39 +1,24 @@
 package main
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/kingpin/v2"
+	"github.com/cswank/tmc2209"
 	_ "github.com/glebarez/go-sqlite"
-	"go.bug.st/serial"
 
-	"periph.io/x/conn/v3/driver/driverreg"
-	"periph.io/x/conn/v3/physic"
-	"periph.io/x/conn/v3/spi"
-	"periph.io/x/conn/v3/spi/spireg"
-	"periph.io/x/host/v3"
+	"go.bug.st/serial"
 )
 
 type (
-	motor struct {
-		RPM   float64
-		Steps int32
-	}
-
-	job struct {
-		M1   motor
-		M2   motor
-		Stop uint8
-	}
-
 	object struct {
 		ID            int     `json:"id"`
 		NGC           *int    `json:"ngc"`
@@ -49,9 +34,9 @@ type (
 var (
 	lat, lon float64
 	db       *sql.DB
+	motor    *tmc2209.Motor
 
-	dev  = kingpin.Arg("device", "serial device").String()
-	port spi.Conn
+	dev = kingpin.Arg("device", "serial device").String()
 )
 
 func main() {
@@ -63,62 +48,49 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if *dev != "" {
-		mode := &serial.Mode{
-			BaudRate: 115200,
-			DataBits: 8,
-			Parity:   serial.NoParity,
-			StopBits: serial.OneStopBit,
-		}
-
-		port, err := serial.Open(*dev, mode)
-		if err != nil {
-			log.Fatalf("unable to open serial port: %s", err)
-		}
-		defer port.Close()
-
-		go func() {
-			for {
-				lg := make([]byte, 1024)
-				n, err := port.Read(lg)
-				if err != nil {
-					log.Fatal(err)
-				}
-				fmt.Println(string(lg[:n]))
-			}
-		}()
+	mode := &serial.Mode{
+		BaudRate: 115200,
+		DataBits: 8,
+		Parity:   serial.NoParity,
+		StopBits: serial.OneStopBit,
 	}
 
-	if _, err := host.Init(); err != nil {
-		log.Fatalf("host init: %s", err)
-	}
-
-	if _, err := driverreg.Init(); err != nil {
-		log.Fatalf("driverreg init: %s", err)
-	}
-
-	p, err := spireg.Open("/dev/spidev0.0")
+	port, err := serial.Open(*dev, mode)
 	if err != nil {
-		log.Fatalf("spi open: %s", err)
+		log.Fatalf("unable to open serial port: %s", err)
+	}
+	defer port.Close()
+
+	port.SetReadTimeout(200 * time.Millisecond)
+
+	motor = tmc2209.New(port, 0, 256)
+
+	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+		log.Fatal(err)
 	}
 
-	defer p.Close()
+	//motor.Move(0.0005787) // I THINK this is how fast it should move with 100:1 gear reduction
+	// motor.Move(10)
+	// time.Sleep(10 * time.Second)
+	// motor.Move(0)
 
-	port, err = p.Connect(physic.MegaHertz, spi.Mode3, 8)
-	if err != nil {
-		log.Fatalf("spi connect: %s", err)
-	}
+	fmt.Println("slow")
+	motor.Move(0.0011574) // I THINK this is how fast it should move with 100:1 gear reduction
+	time.Sleep(10 * time.Second)
+	motor.Move(0)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /objects", getObjects)
-	mux.HandleFunc("GET /objects/{id}", getObject)
-	mux.HandleFunc("POST /objects/{id}", gotoObject)
+	fmt.Println("done")
 
-	fmt.Println("Server is running on port 8080")
-	err = http.ListenAndServe(":8080", mux)
-	if err != nil {
-		fmt.Println("Error starting server:", err)
-	}
+	// mux := http.NewServeMux()
+	// mux.HandleFunc("GET /objects", getObjects)
+	// mux.HandleFunc("GET /objects/{id}", getObject)
+	// mux.HandleFunc("POST /objects/{id}", gotoObject)
+
+	// fmt.Println("Server is running on port 8080")
+	// err = http.ListenAndServe(":8080", mux)
+	// if err != nil {
+	// 	fmt.Println("Error starting server:", err)
+	// }
 }
 
 func getObjects(w http.ResponseWriter, r *http.Request) {
@@ -170,51 +142,15 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ra, err := hm(obj.RA)
+	az, alt, lsrt, H, err := raDecToAltAz(obj.RA, obj.Decl, float64(time.Now().Unix()), lat, lon)
 	if err != nil {
 		fmt.Fprint(w, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	decl, err := dm(obj.Decl)
-	if err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("ra: %d, decl: %d", steps(ra), steps(decl))
-
-	//TODO: make 2 jobs: GOTO and then track
-	j := job{
-		M1: motor{
-			RPM:   400,
-			Steps: steps(ra),
-		},
-		M2: motor{
-			RPM:   400,
-			Steps: steps(decl),
-		},
-	}
-
-	var buf bytes.Buffer
-	binary.Write(&buf, binary.LittleEndian, j)
-	d := buf.Bytes()
-	log.Printf("%x", d)
-
-	// Write 0x10 to the device, and read a byte right after.
-	write := append(d, 0x00)
-	read := make([]byte, len(d)+1)
-	if err := port.Tx(write, read); err != nil {
-		log.Fatal(err)
-	}
-	// Use read.
-	fmt.Printf("spi read: %v\n", read[1:])
-}
-
-func steps(d float64) int32 {
-	return int32(d * 500 * 16)
+	fmt.Fprintf(w, "az: %f, alt: %f, lsrt: %f, H: %f\n", az, alt, lsrt, H)
+	fmt.Println(motor.Move(0.1))
 }
 
 func doGetObject(ids string) (object, error) {
@@ -226,6 +162,69 @@ func doGetObject(ids string) (object, error) {
 	var o object
 	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier WHERE m = ?"
 	return o, db.QueryRow(q, id).Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
+}
+
+func raDecToAltAz(ras, decs string, ts, lat, lon float64) (float64, float64, float64, float64, error) {
+	ra, err := hm(ras)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	dec, err := dm(decs)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	//Meeus 13.5 and 13.6, modified so West longitudes are negative and 0 is North
+	gmst := greenwichMeanSiderealTime(julian(ts))
+	localSiderealTime := math.Mod(gmst+lon, 2*math.Pi)
+
+	H := (localSiderealTime - ra)
+	if H < 0 {
+		H += 2 * math.Pi
+	}
+	if H > math.Pi {
+		H = H - 2*math.Pi
+	}
+
+	az := (math.Atan2(math.Sin(H), math.Cos(H)*math.Sin(lat)-math.Tan(dec)*math.Cos(lat)))
+	a := (math.Asin(math.Sin(lat)*math.Sin(dec) + math.Cos(lat)*math.Cos(dec)*math.Cos(H)))
+	az -= math.Pi
+
+	if az < 0 {
+		az += 2 * math.Pi
+	}
+	return az, a, localSiderealTime, H, nil
+}
+
+func greenwichMeanSiderealTime(jd float64) float64 {
+	//"Expressions for IAU 2000 precession quantities" N. Capitaine1,P.T.Wallace2, and J. Chapront
+	t := (jd - 2451545.0) / 36525.0
+
+	gmst := earthRotationAngle(jd) + (0.014506+4612.156534*t+1.3915817*t*t-0.00000044*t*t*t-0.000029956*t*t*t*t-0.0000000368*t*t*t*t*t)/60.0/60.0*math.Pi/180.0 //eq 42
+	gmst = math.Mod(gmst, 2*math.Pi)
+	if gmst < 0 {
+		gmst += 2 * math.Pi
+	}
+
+	return gmst
+}
+
+func julian(ts float64) float64 {
+	return (ts / 86400.0) + 2440587.5
+}
+
+func earthRotationAngle(jd float64) float64 {
+	//IERS Technical Note No. 32
+	t := jd - 2451545.0
+	f := math.Mod(jd, 1.0)
+
+	theta := 2 * math.Pi * (f + 0.7790572732640 + 0.00273781191135448*t) //eq 14
+	theta = math.Mod(theta, 2*math.Pi)
+	if theta < 0 {
+		theta += 2 * math.Pi
+	}
+
+	return theta
 }
 
 //12:26.2
