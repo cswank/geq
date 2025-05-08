@@ -61,9 +61,7 @@ func main() {
 	}
 	defer port.Close()
 
-	port.SetReadTimeout(200 * time.Millisecond)
-
-	motor = tmc2209.New(port, 0, 256)
+	motor = tmc2209.New(port, 0, 200, 256)
 
 	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
 		log.Fatal(err)
