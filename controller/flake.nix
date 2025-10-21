@@ -14,10 +14,7 @@
       {
         devShells.default = mkShell {
           buildInputs = [
-            sqlite
-            gnumake
-            pkgsCross.muslpi.buildPackages.gcc
-            gcc-
+            sqlite-interactive
           ];
         };
       }

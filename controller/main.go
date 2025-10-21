@@ -14,8 +14,6 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/cswank/tmc2209"
 	_ "github.com/glebarez/go-sqlite"
-
-	"go.bug.st/serial"
 )
 
 type (
@@ -42,53 +40,50 @@ var (
 func main() {
 	kingpin.Parse()
 
+	lon = -104.99
+
 	var err error
 	db, err = sql.Open("sqlite", "./messier.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	mode := &serial.Mode{
-		BaudRate: 115200,
-		DataBits: 8,
-		Parity:   serial.NoParity,
-		StopBits: serial.OneStopBit,
-	}
+	// mode := &serial.Mode{
+	// 	BaudRate: 115200,
+	// 	DataBits: 8,
+	// 	Parity:   serial.NoParity,
+	// 	StopBits: serial.OneStopBit,
+	// }
 
-	port, err := serial.Open(*dev, mode)
-	if err != nil {
-		log.Fatalf("unable to open serial port: %s", err)
-	}
-	defer port.Close()
+	// port, err := serial.Open(*dev, mode)
+	// if err != nil {
+	// 	log.Fatalf("unable to open serial port: %s", err)
+	// }
+	// defer port.Close()
 
-	motor = tmc2209.New(port, 0, 200, 256)
+	// motor = tmc2209.New(port, 0, 200, 256)
 
-	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
-		log.Fatal(err)
-	}
+	// if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	//motor.Move(0.0005787) // I THINK this is how fast it should move with 100:1 gear reduction
-	// motor.Move(10)
+	// fmt.Println("slow")
+	// motor.Move(0.0011574) // I THINK this is how fast it should move with 100:1 gear reduction
 	// time.Sleep(10 * time.Second)
 	// motor.Move(0)
 
-	fmt.Println("slow")
-	motor.Move(0.0011574) // I THINK this is how fast it should move with 100:1 gear reduction
-	time.Sleep(10 * time.Second)
-	motor.Move(0)
+	// fmt.Println("done")
 
-	fmt.Println("done")
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /objects", getObjects)
+	mux.HandleFunc("GET /objects/{id}", getObject)
+	mux.HandleFunc("POST /objects/{id}", gotoObject)
 
-	// mux := http.NewServeMux()
-	// mux.HandleFunc("GET /objects", getObjects)
-	// mux.HandleFunc("GET /objects/{id}", getObject)
-	// mux.HandleFunc("POST /objects/{id}", gotoObject)
-
-	// fmt.Println("Server is running on port 8080")
-	// err = http.ListenAndServe(":8080", mux)
-	// if err != nil {
-	// 	fmt.Println("Error starting server:", err)
-	// }
+	fmt.Println("Server is running on port 8080")
+	err = http.ListenAndServe(":8080", mux)
+	if err != nil {
+		fmt.Println("Error starting server:", err)
+	}
 }
 
 func getObjects(w http.ResponseWriter, r *http.Request) {
@@ -140,15 +135,22 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	az, alt, lsrt, H, err := raDecToAltAz(obj.RA, obj.Decl, float64(time.Now().Unix()), lat, lon)
+	ha, err := hourAngle(obj.RA, time.Now())
 	if err != nil {
 		fmt.Fprint(w, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, "az: %f, alt: %f, lsrt: %f, H: %f\n", az, alt, lsrt, H)
-	fmt.Println(motor.Move(0.1))
+	fmt.Printf("ra: %s, ha: %f\n", obj.RA, ha)
+}
+
+func hourAngle(ra string, t time.Time) (float64, error) {
+	lst := localSiderealTime(t)
+	hours, minutes, err := hm(ra)
+	d := (15 * hours) + (15 * (minutes / 60))
+	fmt.Printf("lst: %f, ra: %s, hours: %f, minutes: %f, d: %f, lon: %f\n", lst, ra, hours, minutes, d, lon)
+	return ((lst / 24) * 360) - d, err
 }
 
 func doGetObject(ids string) (object, error) {
@@ -162,108 +164,53 @@ func doGetObject(ids string) (object, error) {
 	return o, db.QueryRow(q, id).Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
 }
 
-func raDecToAltAz(ras, decs string, ts, lat, lon float64) (float64, float64, float64, float64, error) {
-	ra, err := hm(ras)
-	if err != nil {
-		return 0, 0, 0, 0, err
-	}
-	dec, err := dm(decs)
-	if err != nil {
-		return 0, 0, 0, 0, err
+const J1970 float64 = 2440587.5
+
+func localSiderealTime(datetime time.Time) float64 {
+	gst := greenwichSiderealTime(datetime)
+
+	d := (gst + lon/15.0) / 24.0
+	d -= math.Floor(d)
+	if d < 0 {
+		d += 1
 	}
 
-	//Meeus 13.5 and 13.6, modified so West longitudes are negative and 0 is North
-	gmst := greenwichMeanSiderealTime(julian(ts))
-	localSiderealTime := math.Mod(gmst+lon, 2*math.Pi)
-
-	H := (localSiderealTime - ra)
-	if H < 0 {
-		H += 2 * math.Pi
-	}
-	if H > math.Pi {
-		H = H - 2*math.Pi
-	}
-
-	az := (math.Atan2(math.Sin(H), math.Cos(H)*math.Sin(lat)-math.Tan(dec)*math.Cos(lat)))
-	a := (math.Asin(math.Sin(lat)*math.Sin(dec) + math.Cos(lat)*math.Cos(dec)*math.Cos(H)))
-	az -= math.Pi
-
-	if az < 0 {
-		az += 2 * math.Pi
-	}
-	return az, a, localSiderealTime, H, nil
+	return 24.0 * d
 }
 
-func greenwichMeanSiderealTime(jd float64) float64 {
-	//"Expressions for IAU 2000 precession quantities" N. Capitaine1,P.T.Wallace2, and J. Chapront
-	t := (jd - 2451545.0) / 36525.0
+func greenwichSiderealTime(datetime time.Time) float64 {
+	jd := julianDate(datetime)
+	jd0 := julianDate(time.Date(datetime.Year(), 1, 0, 0, 0, 0, 0, time.UTC))
+	t := (jd0 - 2415020.0) / 36525
+	besselianStarYear := 24.0 - (6.6460656 + 2400.051262*t + 0.00002581*math.Pow(t, 2)) + float64(24*(datetime.Year()-1900))
+	t0 := 0.0657098*math.Floor(jd-jd0) - besselianStarYear
+	ut := (float64(datetime.UnixMilli()) - float64(time.Date(datetime.Year(), datetime.Month(), datetime.Day(), 0, 0, 0, 0, time.UTC).UnixMilli())) / 3600000
+	a := ut * 1.002737909
+	gst := math.Mod(t0+a, 24)
 
-	gmst := earthRotationAngle(jd) + (0.014506+4612.156534*t+1.3915817*t*t-0.00000044*t*t*t-0.000029956*t*t*t*t-0.0000000368*t*t*t*t*t)/60.0/60.0*math.Pi/180.0 //eq 42
-	gmst = math.Mod(gmst, 2*math.Pi)
-	if gmst < 0 {
-		gmst += 2 * math.Pi
+	if gst < 0 {
+		gst += 24
 	}
 
-	return gmst
+	return math.Mod(gst, 24)
 }
 
-func julian(ts float64) float64 {
-	return (ts / 86400.0) + 2440587.5
+func julianDate(datetime time.Time) float64 {
+	var time int64 = datetime.UTC().UnixNano() / 1e6
+	return float64(time)/86400000.0 + J1970
 }
 
-func earthRotationAngle(jd float64) float64 {
-	//IERS Technical Note No. 32
-	t := jd - 2451545.0
-	f := math.Mod(jd, 1.0)
-
-	theta := 2 * math.Pi * (f + 0.7790572732640 + 0.00273781191135448*t) //eq 14
-	theta = math.Mod(theta, 2*math.Pi)
-	if theta < 0 {
-		theta += 2 * math.Pi
-	}
-
-	return theta
-}
-
-//12:26.2
-func hm(s string) (float64, error) {
-	return dm(s)
-}
-
-// +12:57
-func dm(s string) (float64, error) {
-	var i float64
-	if strings.HasPrefix(s, "+") {
-		s = s[1:]
-		i = 1
-	} else if strings.HasPrefix(s, "-") {
-		s = s[1:]
-		i = -1
-	}
-
+func hm(s string) (float64, float64, error) {
 	ss, err := splitCoord(s)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	f, err := parseFloats(ss[0], ss[1])
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	dec := f[0] + f[1]/60.0
-	return dec * i, nil
-}
 
-func dms(s string) (float64, error) {
-	ss, err := splitCoord(s)
-	if err != nil {
-		return 0, err
-	}
-	f, err := parseFloats(ss[0], ss[1])
-	if err != nil {
-		return 0, err
-	}
-	dec := f[0] + f[1]/60.0 + f[2]/3600.0
-	return dec, nil
+	return f[0], f[1], nil
 }
 
 func parseFloats(in ...string) ([]float64, error) {
