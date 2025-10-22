@@ -9,11 +9,11 @@ const gpio = rp2xxx.gpio;
 const uart1 = rp2xxx.uart.instance.num(0);
 const uart2 = rp2xxx.uart.instance.num(1);
 const baud_rate = 115200;
-const uart1_tx_pin = gpio.num(1);
+const uart1_tx_pin = gpio.num(0);
 const uart2_rx_pin = gpio.num(9);
 const mc = rp2xxx.multicore;
-const output = gpio.num(14);
-const index = gpio.num(15);
+const output = gpio.num(15);
+const index = gpio.num(14);
 
 pub const microzig_options = microzig.Options{
     .log_level = .debug,
@@ -36,19 +36,27 @@ pub const message = packed struct {
 pub fn main() !void {
     init();
 
-    while (true) {
-        const msg = try recv();
-        if (msg.address != address) {
-            continue;
-        }
+    std.log.debug("hello", .{});
 
-        microdegrees = msg.microdegrees;
-        mc.fifo.write_blocking(1);
+    while (true) {
+        while (true) {
+            std.log.debug("address: {d}", .{address});
+            ptime.sleep_ms(1000);
+        }
+        // const msg = try recv();
+        // std.log.debug("address: {d}, microdegrees: {d}", .{ msg.address, msg.microdegrees });
+        // if (msg.address != address) {
+        //     continue;
+        // }
+
+        // microdegrees = msg.microdegrees;
+        // mc.fifo.write_blocking(1);
     }
 }
 
 fn recv() !message {
     _ = uart2.read_blocking(&buf, null) catch |err| {
+        std.log.debug("recv error: {}", .{err});
         uart2.clear_errors();
         return err;
     };
@@ -73,6 +81,9 @@ fn count(target: u32) void {
         if (index.read() != state) {
             state ^= 1;
             i += 1;
+        }
+        if (i % 100 == 0) {
+            std.log.debug("index: {d}", .{i});
         }
     }
 
@@ -102,4 +113,10 @@ fn init() void {
     rp2xxx.uart.init_logger(uart1);
 
     mc.launch_core1_with_stack(counter, &core1_stack);
+}
+
+pub fn panic(txt: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    std.log.err("panic: {s}", .{txt});
+    @breakpoint();
+    while (true) {}
 }

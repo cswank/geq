@@ -65,11 +65,11 @@ func main() {
 	}
 	defer port.Close()
 
-	motor = tmc2209.New(port, 0, 200, 256)
+	// motor = tmc2209.New(port, 0, 200, 256)
 
-	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
-		log.Fatal(err)
-	}
+	// if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	// fmt.Println("slow")
 	// motor.Move(0.0011574) // I THINK this is how fast it should move with 100:1 gear reduction
@@ -186,11 +186,11 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := motor.Move(10); err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	// if err := motor.Move(10); err != nil {
+	// 	fmt.Fprint(w, err)
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
 
 	json.NewEncoder(w).Encode(obj)
 }
