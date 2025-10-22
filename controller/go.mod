@@ -7,10 +7,12 @@ require (
 	github.com/cswank/tmc2209 v0.0.0-00010101000000-000000000000
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/stretchr/testify v1.9.0
+	go.bug.st/serial v1.6.4
 )
 
 require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
+	github.com/creack/goselect v0.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.5.0 // indirect

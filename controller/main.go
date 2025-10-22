@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/cswank/tmc2209"
 	_ "github.com/glebarez/go-sqlite"
+	"go.bug.st/serial"
 )
 
 type (
@@ -26,6 +28,7 @@ type (
 		Decl          string  `json:"decl"`
 		Magnitude     float64 `json:"magnitude"`
 		Name          *string `json:"name"`
+		HA            float64 `json:"ha"`
 	}
 )
 
@@ -33,6 +36,7 @@ var (
 	lat, lon float64
 	db       *sql.DB
 	motor    *tmc2209.Motor
+	port     serial.Port
 
 	dev = kingpin.Arg("device", "serial device").String()
 )
@@ -48,24 +52,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// mode := &serial.Mode{
-	// 	BaudRate: 115200,
-	// 	DataBits: 8,
-	// 	Parity:   serial.NoParity,
-	// 	StopBits: serial.OneStopBit,
-	// }
+	mode := &serial.Mode{
+		BaudRate: 115200,
+		DataBits: 8,
+		Parity:   serial.NoParity,
+		StopBits: serial.OneStopBit,
+	}
 
-	// port, err := serial.Open(*dev, mode)
-	// if err != nil {
-	// 	log.Fatalf("unable to open serial port: %s", err)
-	// }
-	// defer port.Close()
+	port, err = serial.Open(*dev, mode)
+	if err != nil {
+		log.Fatalf("unable to open serial port: %s", err)
+	}
+	defer port.Close()
 
-	// motor = tmc2209.New(port, 0, 200, 256)
+	motor = tmc2209.New(port, 0, 200, 256)
 
-	// if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
-	// 	log.Fatal(err)
-	// }
+	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+		log.Fatal(err)
+	}
 
 	// fmt.Println("slow")
 	// motor.Move(0.0011574) // I THINK this is how fast it should move with 100:1 gear reduction
@@ -84,6 +88,30 @@ func main() {
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
+}
+
+type message struct {
+	Sync         uint8
+	Address      uint8
+	Microdegrees uint32
+	CRC          uint8
+}
+
+func write(microdegrees uint32) error {
+	msg := message{
+		Sync:         0x5,
+		Address:      111,
+		Microdegrees: microdegrees,
+	}
+
+	buf := make([]byte, 8)
+	_, err := binary.Encode(buf, binary.BigEndian, msg)
+	if err != nil {
+		return err
+	}
+
+	_, err = port.Write(buf)
+	return err
 }
 
 func getObjects(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +152,13 @@ func getObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	obj.HA, err = hourAngle(obj.RA, time.Now())
+	if err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	json.NewEncoder(w).Encode(obj)
 }
 
@@ -135,22 +170,36 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ha, err := hourAngle(obj.RA, time.Now())
+	obj.HA, err = hourAngle(obj.RA, time.Now())
 	if err != nil {
 		fmt.Fprint(w, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Printf("ra: %s, ha: %f\n", obj.RA, ha)
+	deg := math.Abs(90 - obj.HA)
+	microdegrees := uint32(deg * 1000)
+
+	if write(microdegrees) != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := motor.Move(10); err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(obj)
 }
 
 func hourAngle(ra string, t time.Time) (float64, error) {
 	lst := localSiderealTime(t)
 	hours, minutes, err := hm(ra)
-	d := (15 * hours) + (15 * (minutes / 60))
-	fmt.Printf("lst: %f, ra: %s, hours: %f, minutes: %f, d: %f, lon: %f\n", lst, ra, hours, minutes, d, lon)
-	return ((lst / 24) * 360) - d, err
+	deg := (15 * hours) + (15 * (minutes / 60))
+	return ((lst / 24) * 360) - deg, err
 }
 
 func doGetObject(ids string) (object, error) {

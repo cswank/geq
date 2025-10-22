@@ -6,65 +6,100 @@ const time = microzig.drivers.time;
 const rp2xxx = microzig.hal;
 const gpio = rp2xxx.gpio;
 
-const led = gpio.num(25);
-const uart = rp2xxx.uart.instance.num(0);
+const uart1 = rp2xxx.uart.instance.num(0);
+const uart2 = rp2xxx.uart.instance.num(1);
 const baud_rate = 115200;
-const uart_tx_pin = gpio.num(0);
-const uart_rx_pin = gpio.num(1);
+const uart1_tx_pin = gpio.num(1);
+const uart2_rx_pin = gpio.num(9);
+const mc = rp2xxx.multicore;
+const output = gpio.num(14);
+const index = gpio.num(15);
 
-pub const job = packed struct {
-    rpm: f64,
-    steps: i32,
-    microstep: u8 = 16,
+pub const microzig_options = microzig.Options{
+    .log_level = .debug,
+    .logFn = rp2xxx.uart.log,
+};
+
+var microdegrees: u32 = undefined;
+
+var core1_stack: [1024]u32 = undefined;
+var buf: [25]u8 = .{0} ** 25;
+const address: u8 = 111;
+
+pub const message = packed struct {
+    sync: u8,
+    address: u8,
+    microdegrees: u32,
+    crc: u8 = 0,
 };
 
 pub fn main() !void {
-    led.set_function(.sio);
-    led.set_direction(.out);
-    led.put(1);
-    blink();
+    init();
 
-    inline for (&.{ uart_tx_pin, uart_rx_pin }) |pin| {
-        pin.set_function(.uart);
+    while (true) {
+        const msg = try recv();
+        if (msg.address != address) {
+            continue;
+        }
+
+        microdegrees = msg.microdegrees;
+        mc.fifo.write_blocking(1);
+    }
+}
+
+fn recv() !message {
+    _ = uart2.read_blocking(&buf, null) catch |err| {
+        uart2.clear_errors();
+        return err;
+    };
+
+    std.log.debug("{X}", .{buf});
+
+    return std.mem.bytesToValue(message, buf[0..]);
+}
+
+fn counter() void {
+    while (true) {
+        _ = mc.fifo.read_blocking();
+        count(microdegrees);
+    }
+}
+
+fn count(target: u32) void {
+    var i: u32 = 0;
+    var state: u1 = 0;
+    while (i < target) {
+        ptime.sleep_us(100);
+        if (index.read() != state) {
+            state ^= 1;
+            i += 1;
+        }
     }
 
-    uart.apply(.{
+    output.toggle();
+}
+
+fn init() void {
+    index.set_direction(.in);
+    index.set_function(.sio);
+
+    output.set_direction(.out);
+    output.set_function(.sio);
+
+    uart1_tx_pin.set_function(.uart);
+    uart2_rx_pin.set_function(.uart);
+
+    uart1.apply(.{
         .baud_rate = baud_rate,
         .clock_config = rp2xxx.clock_config,
     });
 
-    var i: i32 = 1;
-    var j: f64 = 0;
-    const rpm: f64 = 400;
-    while (true) {
-        const jb = job{
-            .rpm = rpm - (25 * j),
-            .steps = 10000 * i,
-            .microstep = 16,
-        };
+    uart2.apply(.{
+        .baud_rate = baud_rate,
+        .clock_config = rp2xxx.clock_config,
+    });
 
-        i *= -1;
-        j += 1;
-        if (j == 16) {
-            j = 0;
-        }
+    rp2xxx.uart.init_logger(uart1);
 
-        const data = std.mem.asBytes(&jb);
-
-        uart.write_blocking(data[0..13], null) catch {
-            uart.clear_errors();
-            blink();
-            continue;
-        };
-
-        led.toggle();
-        ptime.sleep_ms(5000);
-    }
-}
-
-fn blink() void {
-    for (0..10) |_| {
-        led.toggle();
-        ptime.sleep_ms(50);
-    }
+    mc.launch_core1_with_stack(counter, &core1_stack);
 }
