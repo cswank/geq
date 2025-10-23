@@ -26,6 +26,8 @@ var core1_stack: [1024]u32 = undefined;
 var buf: [128]u8 = .{0} ** 128;
 const address: u8 = 0x11;
 
+var timeout = time.Duration.from_ms(100);
+
 pub const message = packed struct {
     sync: u8 = 0,
     address: u8 = 0,
@@ -55,10 +57,14 @@ pub fn main() !void {
 fn recv() !message {
     buf = .{0} ** 128;
 
-    _ = uart2.read_blocking(&buf, null) catch |err| {
-        uart2.clear_errors();
-        return err;
-    };
+    var idx: usize = 0;
+    while (idx < 128) {
+        _ = uart2.read_blocking(buf[idx .. idx + 8], timeout) catch |err| {
+            uart2.clear_errors();
+            return err;
+        };
+        idx += 8;
+    }
 
     std.log.debug("{X}", .{buf});
 
