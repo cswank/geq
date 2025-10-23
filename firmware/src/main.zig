@@ -79,12 +79,18 @@ fn counter() void {
 fn count(target: u32) void {
     var i: u32 = 0;
     var state: u1 = 0;
+
+    output.toggle(); //tell controller to start motor
+
     while (i < target) {
-        ptime.sleep_us(10);
+        ptime.sleep_us(100);
         if (index.read() != state) {
             state ^= 1;
             if (state == 1) {
                 i += 1;
+                if (target - i == 3000) {
+                    output.toggle(); //tell controller to slow down
+                }
                 if (i % 1000 == 0) {
                     std.log.debug("index: {d}", .{i});
                 }

@@ -40,6 +40,8 @@ var (
 	port     serial.Port
 
 	dev = kingpin.Arg("device", "serial device").String()
+
+	state int
 )
 
 func main() {
@@ -68,7 +70,7 @@ func main() {
 
 	offset := 23
 	chip := "gpiochip0"
-	l, err := gpiocdev.RequestLine(chip, offset, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(stop))
+	l, err := gpiocdev.RequestLine(chip, offset, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(listen))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -196,12 +198,6 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := motor.Move(10); err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	json.NewEncoder(w).Encode(obj)
 }
 
@@ -299,8 +295,22 @@ func splitCoord(s string) ([]string, error) {
 	return matches, nil
 }
 
-func stop(evt gpiocdev.LineEvent) {
-	if err := motor.Move(0); err != nil {
-		log.Printf("error stopping motor: %s", err)
+func listen(evt gpiocdev.LineEvent) {
+	switch state {
+	case 0:
+		state++
+		if err := motor.Move(10); err != nil {
+			log.Printf("error starting motor")
+		}
+	case 1:
+		state++
+		if err := motor.Move(1); err != nil {
+			log.Printf("error slowing down motor: %s", err)
+		}
+	case 2:
+		state = 0
+		if err := motor.Move(0); err != nil {
+			log.Printf("error stopping motor: %s", err)
+		}
 	}
 }
