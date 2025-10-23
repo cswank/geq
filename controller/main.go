@@ -41,7 +41,7 @@ var (
 
 	dev = kingpin.Arg("device", "serial device").String()
 
-	state int
+	state int = -1
 )
 
 func main() {
@@ -121,7 +121,8 @@ func write(microdegrees uint32) error {
 		return err
 	}
 
-	_, err = port.Write(buf)
+	n, err := port.Write(buf)
+	fmt.Printf("uart write %d (%v)\n", n, err)
 	return err
 }
 
@@ -191,6 +192,8 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 	deg := math.Abs(90 - obj.HA)
 	steps := uint32((deg / 360) * 100 * 200)
 	log.Printf("ha: %f, degrees: %f, steps: %d\n", obj.HA, deg, steps)
+
+	state = 0
 
 	if err := write(steps); err != nil {
 		fmt.Fprint(w, err)
@@ -296,10 +299,11 @@ func splitCoord(s string) ([]string, error) {
 }
 
 func listen(evt gpiocdev.LineEvent) {
+	fmt.Printf("%+v\n", evt)
 	switch state {
 	case 0:
 		state++
-		if err := motor.Move(10); err != nil {
+		if err := motor.Move(5); err != nil {
 			log.Printf("error starting motor")
 		}
 	case 1:

@@ -53,6 +53,8 @@ pub fn main() !void {
 }
 
 fn recv() !message {
+    buf = .{0} ** 128;
+
     _ = uart2.read_blocking(&buf, null) catch |err| {
         uart2.clear_errors();
         return err;
@@ -77,6 +79,7 @@ fn counter() void {
 }
 
 fn count(target: u32) void {
+    std.log.debug("count", .{});
     var i: u32 = 0;
     var state: u1 = 0;
 
@@ -99,7 +102,7 @@ fn count(target: u32) void {
     }
 
     std.log.debug("stop", .{});
-    output.toggle();
+    output.toggle(); //tell controller to stop
 }
 
 fn init() void {
