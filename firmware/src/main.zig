@@ -23,47 +23,54 @@ pub const microzig_options = microzig.Options{
 var microdegrees: u32 = undefined;
 
 var core1_stack: [1024]u32 = undefined;
-var buf: [25]u8 = .{0} ** 25;
-const address: u8 = 111;
+var buf: [32]u8 = .{0} ** 32;
+const address: u8 = 0x11;
 
 pub const message = packed struct {
-    sync: u8,
-    address: u8,
-    microdegrees: u32,
+    sync: u8 = 0,
+    address: u8 = 0,
+    microdegrees: u32 = 0,
     crc: u8 = 0,
 };
 
 pub fn main() !void {
     init();
 
+    ptime.sleep_ms(30000);
+
     std.log.debug("hello", .{});
 
     while (true) {
-        while (true) {
-            std.log.debug("address: {d}", .{address});
-            ptime.sleep_ms(1000);
-        }
-        // const msg = try recv();
-        // std.log.debug("address: {d}, microdegrees: {d}", .{ msg.address, msg.microdegrees });
-        // if (msg.address != address) {
-        //     continue;
-        // }
+        const msg = recv() catch |err| {
+            std.log.debug("recv error: {}", .{err});
+            continue;
+        };
 
-        // microdegrees = msg.microdegrees;
-        // mc.fifo.write_blocking(1);
+        std.log.debug("address: {d}, microdegrees: {d}", .{ msg.address, msg.microdegrees });
+        if (msg.address != address) {
+            continue;
+        }
+
+        microdegrees = msg.microdegrees;
+        mc.fifo.write_blocking(1);
     }
 }
 
 fn recv() !message {
     _ = uart2.read_blocking(&buf, null) catch |err| {
-        std.log.debug("recv error: {}", .{err});
         uart2.clear_errors();
         return err;
     };
 
     std.log.debug("{X}", .{buf});
 
-    return std.mem.bytesToValue(message, buf[0..]);
+    for (0.., buf) |x, element| {
+        if (x < 31 and element == 0x5 and buf[x + 1] == address) {
+            return std.mem.bytesToValue(message, buf[x .. x + 8]);
+        }
+    }
+
+    return message{};
 }
 
 fn counter() void {
@@ -82,7 +89,7 @@ fn count(target: u32) void {
             state ^= 1;
             i += 1;
         }
-        if (i % 100 == 0) {
+        if (i % 1000 == 0) {
             std.log.debug("index: {d}", .{i});
         }
     }

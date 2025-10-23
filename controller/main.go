@@ -15,6 +15,7 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/cswank/tmc2209"
 	_ "github.com/glebarez/go-sqlite"
+	"github.com/warthog618/go-gpiocdev"
 	"go.bug.st/serial"
 )
 
@@ -65,11 +66,19 @@ func main() {
 	}
 	defer port.Close()
 
-	// motor = tmc2209.New(port, 0, 200, 256)
-
-	// if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+	// offset := 23
+	// chip := "gpiochip0"
+	// l, err := gpiocdev.RequestLine(chip, offset, gpiocdev.WithPullUp, gpiocdev.WithRisingEdge, gpiocdev.WithEventHandler(stop))
+	// if err != nil {
 	// 	log.Fatal(err)
 	// }
+	// defer l.Close()
+
+	motor = tmc2209.New(port, 0, 200, 256)
+
+	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+		log.Fatal(err)
+	}
 
 	// fmt.Println("slow")
 	// motor.Move(0.0011574) // I THINK this is how fast it should move with 100:1 gear reduction
@@ -98,14 +107,15 @@ type message struct {
 }
 
 func write(microdegrees uint32) error {
+	log.Println("microdegrees", microdegrees)
 	msg := message{
 		Sync:         0x5,
-		Address:      111,
+		Address:      0x11,
 		Microdegrees: microdegrees,
 	}
 
 	buf := make([]byte, 8)
-	_, err := binary.Encode(buf, binary.BigEndian, msg)
+	_, err := binary.Encode(buf, binary.LittleEndian, msg)
 	if err != nil {
 		return err
 	}
@@ -178,19 +188,19 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deg := math.Abs(90 - obj.HA)
-	microdegrees := uint32(deg * 1000)
+	microdegrees := uint32(deg * 100 * 200)
 
-	if write(microdegrees) != nil {
+	if err := write(microdegrees); err != nil {
 		fmt.Fprint(w, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	// if err := motor.Move(10); err != nil {
-	// 	fmt.Fprint(w, err)
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	return
-	// }
+	if err := motor.Move(10); err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	json.NewEncoder(w).Encode(obj)
 }
@@ -287,4 +297,8 @@ func splitCoord(s string) ([]string, error) {
 	}
 
 	return matches, nil
+}
+
+func stop(evt gpiocdev.LineEvent) {
+	fmt.Printf("stop event: %v\n", evt)
 }

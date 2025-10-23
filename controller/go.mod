@@ -7,6 +7,7 @@ require (
 	github.com/cswank/tmc2209 v0.0.0-00010101000000-000000000000
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/stretchr/testify v1.9.0
+	github.com/warthog618/go-gpiocdev v0.9.1
 	go.bug.st/serial v1.6.4
 )
 
