@@ -23,7 +23,7 @@ pub const microzig_options = microzig.Options{
 var microdegrees: u32 = undefined;
 
 var core1_stack: [1024]u32 = undefined;
-var buf: [32]u8 = .{0} ** 32;
+var buf: [256]u8 = .{0} ** 256;
 const address: u8 = 0x11;
 
 pub const message = packed struct {
@@ -65,7 +65,7 @@ fn recv() !message {
     std.log.debug("{X}", .{buf});
 
     for (0.., buf) |x, element| {
-        if (x < 31 and element == 0x5 and buf[x + 1] == address) {
+        if (x < 255 and element == 0x5 and buf[x + 1] == address) {
             return std.mem.bytesToValue(message, buf[x .. x + 8]);
         }
     }
@@ -87,10 +87,12 @@ fn count(target: u32) void {
         ptime.sleep_us(100);
         if (index.read() != state) {
             state ^= 1;
-            i += 1;
-        }
-        if (i % 1000 == 0) {
-            std.log.debug("index: {d}", .{i});
+            if (state == 1) {
+                i += 1;
+            }
+            if (i % 10000 == 0) {
+                std.log.debug("index: {d}", .{i});
+            }
         }
     }
 
