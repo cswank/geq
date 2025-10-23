@@ -66,13 +66,13 @@ func main() {
 	}
 	defer port.Close()
 
-	// offset := 23
-	// chip := "gpiochip0"
-	// l, err := gpiocdev.RequestLine(chip, offset, gpiocdev.WithPullUp, gpiocdev.WithRisingEdge, gpiocdev.WithEventHandler(stop))
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer l.Close()
+	offset := 23
+	chip := "gpiochip0"
+	l, err := gpiocdev.RequestLine(chip, offset, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(stop))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer l.Close()
 
 	motor = tmc2209.New(port, 0, 200, 256)
 
@@ -107,7 +107,6 @@ type message struct {
 }
 
 func write(microdegrees uint32) error {
-	log.Println("microdegrees", microdegrees)
 	msg := message{
 		Sync:         0x5,
 		Address:      0x11,
@@ -188,9 +187,10 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deg := math.Abs(90 - obj.HA)
-	microdegrees := uint32(deg * 100 * 200)
+	steps := uint32((deg / 360) * 100 * 200)
+	log.Printf("ha: %f, degrees: %f, steps: %d\n", obj.HA, deg, steps)
 
-	if err := write(microdegrees); err != nil {
+	if err := write(steps); err != nil {
 		fmt.Fprint(w, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -300,5 +300,7 @@ func splitCoord(s string) ([]string, error) {
 }
 
 func stop(evt gpiocdev.LineEvent) {
-	fmt.Printf("stop event: %v\n", evt)
+	if err := motor.Move(0); err != nil {
+		log.Printf("error stopping motor: %s", err)
+	}
 }
