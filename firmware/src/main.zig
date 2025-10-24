@@ -55,16 +55,7 @@ pub fn main() !void {
 }
 
 fn recv() !message {
-    buf = .{0} ** 128;
-
-    var idx: usize = 0;
-    while (idx < 128) {
-        _ = uart2.read_blocking(buf[idx .. idx + 8], timeout) catch |err| {
-            uart2.clear_errors();
-            return err;
-        };
-        idx += 8;
-    }
+    try read();
 
     std.log.debug("{X}", .{buf});
 
@@ -75,6 +66,25 @@ fn recv() !message {
     }
 
     return message{};
+}
+
+fn read() !void {
+    buf = .{0} ** 128;
+
+    var to: ?time.Duration = null;
+
+    var idx: usize = 0;
+    while (idx < 128) {
+        _ = uart2.read_blocking(buf[idx .. idx + 8], to) catch |err| {
+            uart2.clear_errors();
+            if (err != error.Timeout) {
+                return err;
+            }
+            return;
+        };
+        to = timeout;
+        idx += 8;
+    }
 }
 
 fn counter() void {
