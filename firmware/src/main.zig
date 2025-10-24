@@ -44,10 +44,11 @@ pub fn main() !void {
             continue;
         };
 
-        std.log.debug("address: {d}, microdegrees: {d}", .{ msg.address, msg.microdegrees });
         if (msg.address != address) {
             continue;
         }
+
+        std.log.debug("address: {d}, microdegrees: {d}", .{ msg.address, msg.microdegrees });
 
         microdegrees = msg.microdegrees;
         mc.fifo.write_blocking(1);
@@ -56,8 +57,6 @@ pub fn main() !void {
 
 fn recv() !message {
     try read();
-
-    std.log.debug("{X}", .{buf});
 
     for (0.., buf) |x, element| {
         if (x < 127 and element == 0x5 and buf[x + 1] == address) {
@@ -102,16 +101,13 @@ fn count(target: u32) void {
     output.toggle(); //tell controller to start motor
 
     while (i < target) {
-        ptime.sleep_us(100);
+        //ptime.sleep_us(1);
         if (index.read() != state) {
-            state ^= 1;
+            state = 1 - state;
             if (state == 1) {
                 i += 1;
-                if (target - i == 3000) {
+                if (target - i == 100) {
                     output.toggle(); //tell controller to slow down
-                }
-                if (i % 1000 == 0) {
-                    std.log.debug("index: {d}", .{i});
                 }
             }
         }

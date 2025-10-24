@@ -31,6 +31,10 @@ type (
 		Name          *string `json:"name"`
 		HA            float64 `json:"ha"`
 	}
+
+	position struct {
+		Degrees float64 `json:"degrees"`
+	}
 )
 
 var (
@@ -76,7 +80,7 @@ func main() {
 	}
 	defer l.Close()
 
-	motor = tmc2209.New(port, 0, 200, 256)
+	motor = tmc2209.New(port, 0, 200, 1)
 
 	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
 		log.Fatal(err)
@@ -93,6 +97,7 @@ func main() {
 	mux.HandleFunc("GET /objects", getObjects)
 	mux.HandleFunc("GET /objects/{id}", getObject)
 	mux.HandleFunc("POST /objects/{id}", gotoObject)
+	mux.HandleFunc("POST /position", move)
 
 	fmt.Println("Server is running on port 8080")
 	err = http.ListenAndServe(":8080", mux)
@@ -193,7 +198,11 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 	steps := uint32((deg / 360) * 100 * 200)
 	log.Printf("ha: %f, degrees: %f, steps: %d\n", obj.HA, deg, steps)
 
-	state = 0
+	if steps < 4000 {
+		state = 1
+	} else {
+		state = 0
+	}
 
 	if err := write(steps); err != nil {
 		fmt.Fprint(w, err)
@@ -202,6 +211,30 @@ func gotoObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(obj)
+}
+
+func move(w http.ResponseWriter, r *http.Request) {
+	var pos position
+	if err := json.NewDecoder(r.Body).Decode(&pos); err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	steps := uint32(((pos.Degrees / 360) * 100 * 200) / 2)
+	log.Printf("degrees: %f, steps: %d\n", pos.Degrees, steps)
+
+	if steps < 100 {
+		state = 1
+	} else {
+		state = 0
+	}
+
+	if err := write(steps); err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 func hourAngle(ra string, t time.Time) (float64, error) {
@@ -299,7 +332,6 @@ func splitCoord(s string) ([]string, error) {
 }
 
 func listen(evt gpiocdev.LineEvent) {
-	fmt.Printf("%+v\n", evt)
 	switch state {
 	case 0:
 		state++
