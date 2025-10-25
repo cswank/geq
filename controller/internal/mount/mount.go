@@ -27,6 +27,16 @@ type (
 		DeclSteps uint16
 		CRC       uint8
 	}
+
+	state int
+)
+
+const (
+	Idle     state = -1
+	Ready    state = 0
+	Slew     state = 1
+	SlowSlew state = 2
+	Tracking state = 3
 )
 
 func New(device string, lon float64, ra, decl int) (*TelescopeMount, error) {
@@ -49,7 +59,7 @@ func New(device string, lon float64, ra, decl int) (*TelescopeMount, error) {
 
 	t := TelescopeMount{
 		port: port,
-		ra:   RA{motor: motor, state: -1},
+		ra:   RA{motor: motor, state: Idle, ha: 90},
 		decl: Declination{motor: motor},
 	}
 
