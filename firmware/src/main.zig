@@ -20,7 +20,7 @@ pub const microzig_options = microzig.Options{
     .logFn = rp2xxx.uart.log,
 };
 
-var microdegrees: u32 = undefined;
+var steps: u16 = undefined;
 
 var core1_stack: [1024]u32 = undefined;
 var buf: [128]u8 = .{0} ** 128;
@@ -31,7 +31,8 @@ var timeout = time.Duration.from_ms(100);
 pub const message = packed struct {
     sync: u8 = 0,
     address: u8 = 0,
-    microdegrees: u32 = 0,
+    ra_steps: u16 = 0,
+    decl_steps: u16 = 0,
     crc: u8 = 0,
 };
 
@@ -48,9 +49,9 @@ pub fn main() !void {
             continue;
         }
 
-        std.log.debug("address: {d}, microdegrees: {d}", .{ msg.address, msg.microdegrees });
+        std.log.debug("address: {d}, steps: {d}", .{ msg.address, msg.ra_steps });
 
-        microdegrees = msg.microdegrees;
+        steps = msg.ra_steps;
         mc.fifo.write_blocking(1);
     }
 }
@@ -89,11 +90,11 @@ fn read() !void {
 fn counter() void {
     while (true) {
         _ = mc.fifo.read_blocking();
-        count(microdegrees);
+        count(steps);
     }
 }
 
-fn count(target: u32) void {
+fn count(target: u16) void {
     std.log.debug("count", .{});
     var i: u32 = 0;
     var state: u1 = 0;
@@ -101,7 +102,7 @@ fn count(target: u32) void {
     output.toggle(); //tell controller to start motor
 
     while (i < target) {
-        //ptime.sleep_us(1);
+        ptime.sleep_us(100);
         if (index.read() != state) {
             state = 1 - state;
             if (state == 1) {
