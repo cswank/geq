@@ -42,11 +42,12 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 	log.Printf("ha: %f, degrees: %f, steps: %d\n", r.ha, deg, steps)
 
 	if steps < 100 {
-		r.state = Slew // start with slow slew
+		r.state = Slew
 	} else {
 		r.state = Ready
 	}
 
+	//TODO: add more steps based on how long it will take the motor to get to the final position
 	return steps, nil
 }
 

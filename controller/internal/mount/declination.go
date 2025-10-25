@@ -12,7 +12,7 @@ type (
 		motor   *tmc2209.Motor
 		line    *gpiocdev.Line
 		address int
-		state   int
+		state   state
 	}
 )
 

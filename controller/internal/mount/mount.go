@@ -59,7 +59,7 @@ func New(device string, lon float64, ra, decl int) (*TelescopeMount, error) {
 
 	t := TelescopeMount{
 		port: port,
-		ra:   RA{motor: motor, state: Idle, ha: 90},
+		ra:   RA{motor: motor, state: Idle, ha: 90, longitude: lon},
 		decl: Declination{motor: motor},
 	}
 
@@ -77,6 +77,10 @@ func New(device string, lon float64, ra, decl int) (*TelescopeMount, error) {
 }
 
 func (t *TelescopeMount) Goto(ra, decl string) error {
+	if t.ra.state == Slew || t.ra.state == SlowSlew || t.decl.state == Slew || t.decl.state == SlowSlew {
+		return fmt.Errorf("refusing to goto object while the mount is slewing")
+	}
+
 	ts := time.Now()
 	rSteps, err := t.ra.move(ra, ts)
 	if err != nil {
@@ -95,6 +99,7 @@ func (t *TelescopeMount) HourAngle(ra string) (float64, error) {
 	return t.ra.hourAngle(ra, time.Now())
 }
 
+// count sends the ra and decl steps to mcu that actually does the counting
 func (t *TelescopeMount) count(ra, decl uint16) error {
 	msg := message{
 		Sync:      0x5,
