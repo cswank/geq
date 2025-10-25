@@ -42,13 +42,15 @@ func New(device string, lon float64, ra, decl int) (*TelescopeMount, error) {
 		log.Fatalf("unable to open serial port: %s", err)
 	}
 
+	motor := tmc2209.New(port, 0, 200, 1)
+	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+		log.Fatal(err)
+	}
+
 	t := TelescopeMount{
-		ra: RA{
-			motor: tmc2209.New(port, 111, 200, 1),
-		},
-		decl: Declination{
-			motor: tmc2209.New(port, 111, 200, 1),
-		},
+		port: port,
+		ra:   RA{motor: motor, state: -1},
+		decl: Declination{motor: motor},
 	}
 
 	t.ra.line, err = gpiocdev.RequestLine("gpiochip0", ra, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.ra.listen))
@@ -77,6 +79,10 @@ func (t *TelescopeMount) Goto(ra, decl string) error {
 	}
 
 	return t.count(rSteps, dSteps)
+}
+
+func (t *TelescopeMount) HourAngle(ra string) (float64, error) {
+	return t.ra.hourAngle(ra, time.Now())
 }
 
 func (t *TelescopeMount) count(ra, decl uint16) error {

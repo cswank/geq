@@ -33,7 +33,7 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 	steps := uint16(((deg / 360) * 100 * 200) / 2)
 	log.Printf("ha: %f, degrees: %f, steps: %d\n", ha, deg, steps)
 
-	if steps < 4000 {
+	if steps < 100 {
 		r.state = 1
 	} else {
 		r.state = 0

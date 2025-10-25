@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	//go:embed messier.db
+	//go:embed files/messier.db
 	dbf embed.FS
 )
 
@@ -102,6 +102,13 @@ func (s Server) getObjects(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) getObject(w http.ResponseWriter, r *http.Request) {
 	obj, err := s.doGetObject(r.PathValue("id"))
+	if err != nil {
+		fmt.Fprint(w, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	obj.HA, err = s.mount.HourAngle(obj.RA)
 	if err != nil {
 		fmt.Fprint(w, err)
 		w.WriteHeader(http.StatusInternalServerError)
