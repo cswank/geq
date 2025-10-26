@@ -38,7 +38,7 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 		return 0, err
 	}
 
-	deg := currentHA - ha
+	deg := ha - currentHA
 	if r.state == Tracking {
 		d := time.Since(r.start)
 		deg += (15 * (d.Minutes() / 60))
