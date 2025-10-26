@@ -40,6 +40,7 @@ func (d *Declination) move(decl string) (uint16, error) {
 	}
 
 	steps := uint16(((deg / 360) * 100 * 200) / 2)
+	log.Printf("current deg: %f, degrees: %f, steps: %d\n", currentDeg, deg, steps)
 	return steps, nil
 }
 

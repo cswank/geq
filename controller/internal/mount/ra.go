@@ -52,6 +52,7 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 	}
 
 	r.ra = ra
+	r.start = t
 
 	steps := uint16(((deg / 360) * 100 * 200) / 2)
 	log.Printf("current ha: %f, ha: %f, degrees: %f, steps: %d\n", currentHA, ha, deg, steps)
