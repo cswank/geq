@@ -3,6 +3,7 @@ package mount
 import (
 	"log"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/cswank/tmc2209"
@@ -15,6 +16,7 @@ const (
 
 type (
 	RA struct {
+		lock      *sync.Mutex
 		motor     *tmc2209.Motor
 		line      *gpiocdev.Line
 		longitude float64
@@ -71,6 +73,8 @@ func (r RA) localSiderealTime(datetime time.Time) float64 {
 }
 
 func (r *RA) listen(evt gpiocdev.LineEvent) {
+	r.lock.Lock()
+
 	switch r.state {
 	case Ready:
 		r.state++
@@ -96,6 +100,8 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 			log.Printf("error stopping motor: %s", err)
 		}
 	}
+
+	r.lock.Unlock()
 }
 
 func greenwichSiderealTime(datetime time.Time) float64 {

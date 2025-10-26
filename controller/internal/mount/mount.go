@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cswank/tmc2209"
@@ -37,9 +38,12 @@ const (
 	Slew     state = 1
 	SlowSlew state = 2
 	Tracking state = 3
+
+	raMotorAddress   = 0
+	declMotorAddress = 1
 )
 
-func New(device string, lon float64, ra, decl int) (*TelescopeMount, error) {
+func New(device string, lon float64, raPin, declPin int) (*TelescopeMount, error) {
 	mode := &serial.Mode{
 		BaudRate: 115200,
 		DataBits: 8,
@@ -52,23 +56,30 @@ func New(device string, lon float64, ra, decl int) (*TelescopeMount, error) {
 		log.Fatalf("unable to open serial port: %s", err)
 	}
 
-	motor := tmc2209.New(port, 0, 200, 1)
-	if err := motor.Setup(tmc2209.SpreadCycle()...); err != nil {
+	raMotor := tmc2209.New(port, raMotorAddress, 200, 1)
+	if err := raMotor.Setup(tmc2209.SpreadCycle()...); err != nil {
 		log.Fatal(err)
 	}
 
-	t := TelescopeMount{
-		port: port,
-		ra:   RA{motor: motor, state: Idle, ha: 90, longitude: lon},
-		decl: Declination{motor: motor},
+	declMotor := tmc2209.New(port, declMotorAddress, 200, 1)
+	if err := declMotor.Setup(tmc2209.SpreadCycle()...); err != nil {
+		log.Fatal(err)
 	}
 
-	t.ra.line, err = gpiocdev.RequestLine("gpiochip0", ra, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.ra.listen))
+	var lock sync.Mutex
+
+	t := TelescopeMount{
+		port: port,
+		ra:   RA{lock: &lock, motor: raMotor, state: Idle, ha: 90, longitude: lon},
+		decl: Declination{lock: &lock, motor: declMotor},
+	}
+
+	t.ra.line, err = gpiocdev.RequestLine("gpiochip0", raPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.ra.listen))
 	if err != nil {
 		return nil, err
 	}
 
-	t.decl.line, err = gpiocdev.RequestLine("gpiochip0", decl, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.decl.listen))
+	t.decl.line, err = gpiocdev.RequestLine("gpiochip0", declPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.decl.listen))
 	if err != nil {
 		return nil, err
 	}

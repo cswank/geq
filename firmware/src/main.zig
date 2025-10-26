@@ -12,15 +12,17 @@ const baud_rate = 115200;
 const uart1_tx_pin = gpio.num(0);
 const uart2_rx_pin = gpio.num(9);
 const mc = rp2xxx.multicore;
-const output = gpio.num(15);
-const index = gpio.num(14);
+const decl_output = gpio.num(12);
+const ra_output = gpio.num(13);
+const decl_index = gpio.num(14);
+const ra_index = gpio.num(15);
 
 pub const microzig_options = microzig.Options{
     .log_level = .debug,
     .logFn = rp2xxx.uart.log,
 };
 
-var steps: u16 = undefined;
+var ra_steps: u16 = undefined;
 
 var core1_stack: [1024]u32 = undefined;
 var buf: [128]u8 = .{0} ** 128;
@@ -51,8 +53,11 @@ pub fn main() !void {
 
         std.log.debug("address: {d}, steps: {d}", .{ msg.address, msg.ra_steps });
 
-        steps = msg.ra_steps;
+        ra_steps = msg.ra_steps;
+
         mc.fifo.write_blocking(1);
+
+        count(msg.decl_steps, decl_output, decl_index);
     }
 }
 
@@ -90,11 +95,11 @@ fn read() !void {
 fn counter() void {
     while (true) {
         _ = mc.fifo.read_blocking();
-        count(steps);
+        count(ra_steps, ra_output, ra_index);
     }
 }
 
-fn count(target: u16) void {
+fn count(target: u16, output: gpio.Pin, index: gpio.Pin) void {
     std.log.debug("count", .{});
     var i: u32 = 0;
     var state: u1 = 0;
@@ -119,11 +124,17 @@ fn count(target: u16) void {
 }
 
 fn init() void {
-    index.set_direction(.in);
-    index.set_function(.sio);
+    decl_index.set_direction(.in);
+    decl_index.set_function(.sio);
 
-    output.set_direction(.out);
-    output.set_function(.sio);
+    decl_output.set_direction(.out);
+    decl_output.set_function(.sio);
+
+    ra_index.set_direction(.in);
+    ra_index.set_function(.sio);
+
+    ra_output.set_direction(.out);
+    ra_output.set_function(.sio);
 
     uart1_tx_pin.set_function(.uart);
     uart2_rx_pin.set_function(.uart);

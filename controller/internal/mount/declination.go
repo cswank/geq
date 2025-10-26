@@ -2,6 +2,7 @@ package mount
 
 import (
 	"log"
+	"sync"
 
 	"github.com/cswank/tmc2209"
 	"github.com/warthog618/go-gpiocdev"
@@ -9,6 +10,7 @@ import (
 
 type (
 	Declination struct {
+		lock    *sync.Mutex
 		motor   *tmc2209.Motor
 		line    *gpiocdev.Line
 		address int
@@ -21,6 +23,8 @@ func (d *Declination) move(decl string) (uint16, error) {
 }
 
 func (d *Declination) listen(evt gpiocdev.LineEvent) {
+	d.lock.Lock()
+
 	switch d.state {
 	case 0:
 		d.state++
@@ -38,4 +42,6 @@ func (d *Declination) listen(evt gpiocdev.LineEvent) {
 			log.Printf("error tracking motor: %s", err)
 		}
 	}
+
+	d.lock.Unlock()
 }
