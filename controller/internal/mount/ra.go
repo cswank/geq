@@ -22,26 +22,39 @@ type (
 		longitude float64
 		state     state
 		start     time.Time
-		ha        float64
+		ra        string
+		direction float64
 	}
 )
 
 func (r *RA) move(ra string, t time.Time) (uint16, error) {
+	currentHA, err := r.hourAngle(r.ra, t)
+	if err != nil {
+		return 0, err
+	}
+
 	ha, err := r.hourAngle(ra, t)
 	if err != nil {
 		return 0, err
 	}
 
-	deg := r.ha - ha
+	deg := currentHA - ha
 	if r.state == Tracking {
 		d := time.Since(r.start)
 		deg += (15 * (d.Minutes() / 60))
 	}
 
-	r.ha = ha
+	if deg < 0 {
+		r.direction *= -1
+		deg *= -1
+	} else {
+		r.direction = 1
+	}
+
+	r.ra = ra
 
 	steps := uint16(((deg / 360) * 100 * 200) / 2)
-	log.Printf("ha: %f, degrees: %f, steps: %d\n", r.ha, deg, steps)
+	log.Printf("current ha: %f, ha: %f, degrees: %f, steps: %d\n", currentHA, ha, deg, steps)
 
 	if steps < 100 {
 		r.state = Slew

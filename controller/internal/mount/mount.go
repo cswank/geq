@@ -70,8 +70,8 @@ func New(device string, lon float64, raPin, declPin int) (*TelescopeMount, error
 
 	t := TelescopeMount{
 		port: port,
-		ra:   RA{lock: &lock, motor: raMotor, state: Idle, ha: 90, longitude: lon},
-		decl: Declination{lock: &lock, motor: declMotor},
+		ra:   RA{lock: &lock, motor: raMotor, state: Idle, ra: "02:31.8116667", longitude: lon},
+		decl: Declination{decl: 90, lock: &lock, motor: declMotor},
 	}
 
 	t.ra.line, err = gpiocdev.RequestLine("gpiochip0", raPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.ra.listen))
