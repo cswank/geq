@@ -15,32 +15,43 @@ type (
 		line      *gpiocdev.Line
 		address   int
 		state     state
-		decl      string
+		dec       string
 		direction float64
 	}
 )
 
 // TODO: make sure motor always moves back accross polaris when slewing
-func (d *Declination) move(decl string) (uint16, error) {
-	currentDeg, err := d.degrees(d.decl)
+func (d *Declination) move(dec string) (uint16, error) {
+	currentDeg, err := d.degrees(d.dec)
 	if err != nil {
 		return 0, err
 	}
 
-	deg, err := d.degrees(decl)
-	deg += currentDeg
+	deg, err := d.degrees(dec)
+	if err != nil {
+		return 0, err
+	}
 
-	d.decl = decl
+	deg = deg - currentDeg
 
 	if deg < 0 {
-		d.direction *= -1
+		d.direction = -1
 		deg *= -1
 	} else {
 		d.direction = 1
 	}
 
+	d.dec = dec
+
 	steps := uint16(((deg / 360) * 100 * 200) / 2)
-	log.Printf("current deg: %f, degrees: %f, steps: %d\n", currentDeg, deg, steps)
+	log.Printf("dec: current deg: %f, degrees: %f, steps: %d\n", currentDeg, deg, steps)
+
+	if steps < 100 {
+		d.state = Slew
+	} else {
+		d.state = Ready
+	}
+
 	return steps, nil
 }
 

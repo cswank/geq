@@ -18,7 +18,7 @@ type (
 	TelescopeMount struct {
 		port serial.Port
 		ra   RA
-		decl Declination
+		dec  Declination
 	}
 
 	message struct {
@@ -71,7 +71,7 @@ func New(device string, lon float64, raPin, declPin int) (*TelescopeMount, error
 	t := TelescopeMount{
 		port: port,
 		ra:   RA{lock: &lock, motor: raMotor, state: Idle, ra: "02:31.8116667", longitude: lon},
-		decl: Declination{decl: "90:00", lock: &lock, motor: declMotor},
+		dec:  Declination{dec: "89:15.85", lock: &lock, motor: declMotor},
 	}
 
 	t.ra.line, err = gpiocdev.RequestLine("gpiochip0", raPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.ra.listen))
@@ -79,7 +79,7 @@ func New(device string, lon float64, raPin, declPin int) (*TelescopeMount, error
 		return nil, err
 	}
 
-	t.decl.line, err = gpiocdev.RequestLine("gpiochip0", declPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.decl.listen))
+	t.dec.line, err = gpiocdev.RequestLine("gpiochip0", declPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.dec.listen))
 	if err != nil {
 		return nil, err
 	}
@@ -87,8 +87,8 @@ func New(device string, lon float64, raPin, declPin int) (*TelescopeMount, error
 	return &t, nil
 }
 
-func (t *TelescopeMount) Goto(ra, decl string) error {
-	if t.ra.state == Slew || t.ra.state == SlowSlew || t.decl.state == Slew || t.decl.state == SlowSlew {
+func (t *TelescopeMount) Goto(ra, dec string) error {
+	if t.ra.state == Slew || t.ra.state == SlowSlew || t.dec.state == Slew || t.dec.state == SlowSlew {
 		return fmt.Errorf("refusing to goto object while the mount is slewing")
 	}
 
@@ -98,7 +98,7 @@ func (t *TelescopeMount) Goto(ra, decl string) error {
 		return err
 	}
 
-	dSteps, err := t.decl.move(decl)
+	dSteps, err := t.dec.move(dec)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (t *TelescopeMount) count(ra, decl uint16) error {
 func (t TelescopeMount) Close() {
 	t.port.Close()
 	t.ra.line.Close()
-	t.decl.line.Close()
+	t.dec.line.Close()
 }
 
 func parseFloats(in ...string) ([]float64, error) {

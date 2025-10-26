@@ -45,7 +45,7 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 	}
 
 	if deg < 0 {
-		r.direction *= -1
+		r.direction = -1
 		deg *= -1
 	} else {
 		r.direction = 1
@@ -55,7 +55,7 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 	r.start = t
 
 	steps := uint16(((deg / 360) * 100 * 200) / 2)
-	log.Printf("current ha: %f, ha: %f, degrees: %f, steps: %d\n", currentHA, ha, deg, steps)
+	log.Printf("ra: current ha: %f, ha: %f, degrees: %f, steps: %d\n", currentHA, ha, deg, steps)
 
 	if steps < 100 {
 		r.state = Slew
