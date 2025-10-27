@@ -5,10 +5,11 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
-	"text/template"
+	"strings"
 
 	"github.com/cswank/geq/controller/internal/mount"
 	_ "modernc.org/sqlite"
@@ -37,7 +38,7 @@ type (
 	}
 
 	objects struct {
-		Objects []object
+		Objects template.JS
 	}
 
 	Server struct {
@@ -46,8 +47,17 @@ type (
 		mux   *http.ServeMux
 		mount *mount.TelescopeMount
 		idx   *template.Template
+		obj   *template.Template
 	}
 )
+
+func (o object) MarshalJSON() ([]byte, error) {
+	var n string
+	if o.Name != nil {
+		n = *o.Name
+	}
+	return json.Marshal([]string{strconv.Itoa(o.ID), n})
+}
 
 func New(m *mount.TelescopeMount) (*Server, error) {
 	fn, f, err := vfs.New(dbf)
@@ -70,16 +80,28 @@ func New(m *mount.TelescopeMount) (*Server, error) {
 		return nil, err
 	}
 
+	s, err = static.ReadFile("www/object.ghtml")
+	if err != nil {
+		return nil, err
+	}
+
+	obj, err := template.New("object").Parse(string(s))
+	if err != nil {
+		return nil, err
+	}
+
 	srv := Server{
 		idx:   idx,
+		obj:   obj,
 		f:     f,
 		db:    db,
 		mount: m,
 		mux:   http.NewServeMux(),
 	}
 
-	srv.mux.HandleFunc("GET /static/*", serveStatic)
-	srv.mux.HandleFunc("GET /index", handle(srv.index))
+	srv.mux.HandleFunc("GET /", handle(srv.index))
+	srv.mux.HandleFunc("GET /{id}", handle(srv.object))
+	srv.mux.HandleFunc("GET /static/{pth}", handle(serveStatic))
 	srv.mux.HandleFunc("GET /objects", handle(srv.getObjects))
 	srv.mux.HandleFunc("GET /objects/{id}", handle(srv.getObject))
 	srv.mux.HandleFunc("POST /objects/{id}", handle(srv.gotoObject))
@@ -111,7 +133,21 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return s.idx.ExecuteTemplate(w, "index", objects{Objects: objs})
+	j, err := json.Marshal(objs)
+	if err != nil {
+		return err
+	}
+
+	return s.idx.ExecuteTemplate(w, "index", objects{Objects: template.JS(j)})
+}
+
+func (s Server) object(w http.ResponseWriter, r *http.Request) error {
+	o, err := s.doGetObject(r)
+	if err != nil {
+		return err
+	}
+
+	return s.obj.ExecuteTemplate(w, "object", o)
 }
 
 func (s Server) getObjects(w http.ResponseWriter, r *http.Request) error {
@@ -124,7 +160,7 @@ func (s Server) getObjects(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
-	obj, err := s.doGetObject(r.PathValue("id"))
+	obj, err := s.doGetObject(r)
 	if err != nil {
 		return err
 	}
@@ -138,7 +174,7 @@ func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
-	obj, err := s.doGetObject(r.PathValue("id"))
+	obj, err := s.doGetObject(r)
 	if err != nil {
 		return err
 	}
@@ -150,8 +186,8 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 	return json.NewEncoder(w).Encode(obj)
 }
 
-func (s Server) doGetObject(ids string) (object, error) {
-	id, err := strconv.Atoi(ids)
+func (s Server) doGetObject(r *http.Request) (object, error) {
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		return object{}, err
 	}
@@ -187,7 +223,18 @@ func (s Server) doGetObjects(r *http.Request) ([]object, error) {
 	return objs, nil
 }
 
-func serveStatic(w http.ResponseWriter, req *http.Request) {
-	h := http.FileServer(http.FS(static))
-	h.ServeHTTP(w, req)
+func serveStatic(w http.ResponseWriter, req *http.Request) error {
+	pth := req.URL.Path
+	pth = strings.Replace(pth, "/static/", "www/", 1)
+	if strings.HasSuffix(pth, ".css") {
+		w.Header().Add("content-type", "text/css")
+	} else {
+		w.Header().Add("content-type", "text/javascript")
+	}
+	p, err := static.ReadFile(pth)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(p)
+	return err
 }
