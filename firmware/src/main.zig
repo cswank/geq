@@ -13,8 +13,8 @@ const uart1_tx_pin = gpio.num(0);
 const uart2_rx_pin = gpio.num(9);
 const mc = rp2xxx.multicore;
 
-const decl_output = gpio.num(12);
-const decl_index = gpio.num(13);
+const dec_output = gpio.num(12);
+const dec_index = gpio.num(13);
 
 const ra_output = gpio.num(14);
 const ra_index = gpio.num(15);
@@ -35,8 +35,8 @@ var timeout = time.Duration.from_ms(100);
 pub const message = packed struct {
     sync: u8 = 0,
     address: u8 = 0,
-    ra_steps: u16 = 0,
-    decl_steps: u16 = 0,
+    right_ascension_steps: u16 = 0,
+    declination_steps: u16 = 0,
     crc: u8 = 0,
 };
 
@@ -53,13 +53,13 @@ pub fn main() !void {
             continue;
         }
 
-        std.log.debug("address: {d}, steps: {d}", .{ msg.address, msg.ra_steps });
+        std.log.debug("address: {d}, steps: {d}", .{ msg.address, msg.right_ascension_steps });
 
-        ra_steps = msg.ra_steps;
+        ra_steps = msg.right_ascension_steps;
 
         mc.fifo.write_blocking(1);
 
-        count(msg.decl_steps, decl_output, decl_index);
+        count(msg.declination_steps, dec_output, dec_index);
     }
 }
 
@@ -94,7 +94,7 @@ fn read() !void {
     }
 }
 
-fn counter() void {
+fn ra_counter() void {
     while (true) {
         _ = mc.fifo.read_blocking();
         count(ra_steps, ra_output, ra_index);
@@ -126,11 +126,11 @@ fn count(target: u16, output: gpio.Pin, index: gpio.Pin) void {
 }
 
 fn init() void {
-    decl_index.set_direction(.in);
-    decl_index.set_function(.sio);
+    dec_index.set_direction(.in);
+    dec_index.set_function(.sio);
 
-    decl_output.set_direction(.out);
-    decl_output.set_function(.sio);
+    dec_output.set_direction(.out);
+    dec_output.set_function(.sio);
 
     ra_index.set_direction(.in);
     ra_index.set_function(.sio);
@@ -153,7 +153,7 @@ fn init() void {
 
     rp2xxx.uart.init_logger(uart1);
 
-    mc.launch_core1_with_stack(counter, &core1_stack);
+    mc.launch_core1_with_stack(ra_counter, &core1_stack);
 }
 
 pub fn panic(txt: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {

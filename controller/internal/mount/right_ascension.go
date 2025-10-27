@@ -44,18 +44,18 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 		deg += (15 * (d.Minutes() / 60))
 	}
 
+	r.ra = ra
+	r.start = t
+
+	steps := uint16(((deg / 360) * 100 * 200) / 2)
+	log.Printf("ra: current ha: %f, ha: %f, degrees: %f, steps: %d\n", currentHA, ha, deg, steps)
+
 	if deg < 0 {
 		r.direction = -1
 		deg *= -1
 	} else {
 		r.direction = 1
 	}
-
-	r.ra = ra
-	r.start = t
-
-	steps := uint16(((deg / 360) * 100 * 200) / 2)
-	log.Printf("ra: current ha: %f, ha: %f, degrees: %f, steps: %d\n", currentHA, ha, deg, steps)
 
 	if steps < 100 {
 		r.state = Slew
@@ -92,12 +92,12 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 	switch r.state {
 	case Ready:
 		r.state++
-		if err := r.motor.Move(5); err != nil {
+		if err := r.motor.Move(5 * r.direction); err != nil {
 			log.Printf("error starting motor")
 		}
 	case Slew:
 		r.state++
-		if err := r.motor.Move(1); err != nil {
+		if err := r.motor.Move(1 * r.direction); err != nil {
 			log.Printf("error slowing down motor: %s", err)
 		}
 	case SlowSlew:
@@ -105,7 +105,7 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 		//TODO: set motor microsteps to 256
 
 		// I THINK this is how fast it should move with 100:1 gear reduction
-		if err := r.motor.Move(0.0011574); err != nil {
+		if err := r.motor.Move(0.0011574 * r.direction); err != nil {
 			r.start = time.Now()
 			log.Printf("error tracking motor: %s", err)
 		}
