@@ -5,6 +5,19 @@
   </head>
   <body>
     <h5>M{{.ID}} {{.Name}}</h5>
+    <button onclick="goto()">Goto</button>
   </body>
+  <script>
+   function goto() {
+       fetch('/objects/{{.ID}}', {
+           method: 'POST',
+       })
+           .then(response => {
+               if (!response.ok) {
+                   throw new Error('Network response was not ok');
+               }
+           });
+   }
+  </script>
 </html>
 
