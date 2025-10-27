@@ -40,15 +40,8 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 
 	deg := ha - currentHA
 	if r.state == Tracking {
-		d := time.Since(r.start)
-		deg += (15 * (d.Minutes() / 60))
+		deg += 15 * time.Since(r.start).Minutes() / 60
 	}
-
-	r.ra = ra
-	r.start = t
-
-	steps := uint16(((deg / 360) * 100 * 200) / 2)
-	log.Printf("ra: current ha: %f, ha: %f, degrees: %f, steps: %d\n", currentHA, ha, deg, steps)
 
 	if deg < 0 {
 		r.direction = -1
@@ -56,6 +49,12 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 	} else {
 		r.direction = 1
 	}
+
+	r.ra = ra
+	r.start = t
+
+	steps := degreesToSteps(deg)
+	log.Printf("ra: current ha: %f, ha: %f, degrees: %f, steps: %d, diration: %f\n", currentHA, ha, deg, steps, r.direction)
 
 	if steps < 100 {
 		r.state = Slew
@@ -102,7 +101,7 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 		}
 	case SlowSlew:
 		r.state++
-		//TODO: set motor microsteps to 256
+		//TODO: set motor microsteps to 256 (must use microsteps = 1 because the pico counter can't keep up with 256 during slew)
 
 		// I THINK this is how fast it should move with 100:1 gear reduction
 		if err := r.motor.Move(0.0011574 * r.direction); err != nil {

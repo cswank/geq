@@ -1,0 +1,4 @@
+{{define "content"}}
+  {{range .Objects}}<a href="/{{.ID}}">{{.ID}} {{.Name}}</a><br/>{{end}}
+{{end}}
+

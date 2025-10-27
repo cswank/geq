@@ -163,3 +163,7 @@ func splitCoord(s string) ([]string, error) {
 
 	return matches, nil
 }
+
+func degreesToSteps(deg float64) uint16 {
+	return uint16(((deg / 360) * 100 * 200) / 2)
+}

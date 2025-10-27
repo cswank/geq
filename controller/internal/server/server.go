@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"text/template"
 
 	"github.com/cswank/geq/controller/internal/mount"
 	_ "modernc.org/sqlite"
@@ -17,6 +18,9 @@ import (
 var (
 	//go:embed files/messier.db
 	dbf embed.FS
+
+	//go:embed www/*
+	static embed.FS
 )
 
 type (
@@ -32,11 +36,16 @@ type (
 		HA            float64 `json:"ha"`
 	}
 
+	objects struct {
+		Objects []object
+	}
+
 	Server struct {
 		db    *sql.DB
 		f     *vfs.FS
 		mux   *http.ServeMux
 		mount *mount.TelescopeMount
+		idx   *template.Template
 	}
 )
 
@@ -51,18 +60,31 @@ func New(m *mount.TelescopeMount) (*Server, error) {
 		return nil, err
 	}
 
-	s := Server{
+	s, err := static.ReadFile("www/index.ghtml")
+	if err != nil {
+		return nil, err
+	}
+
+	idx, err := template.New("index").Parse(string(s))
+	if err != nil {
+		return nil, err
+	}
+
+	srv := Server{
+		idx:   idx,
 		f:     f,
 		db:    db,
 		mount: m,
 		mux:   http.NewServeMux(),
 	}
 
-	s.mux.HandleFunc("GET /objects", s.getObjects)
-	s.mux.HandleFunc("GET /objects/{id}", s.getObject)
-	s.mux.HandleFunc("POST /objects/{id}", s.gotoObject)
+	srv.mux.HandleFunc("GET /static/*", serveStatic)
+	srv.mux.HandleFunc("GET /index", handle(srv.index))
+	srv.mux.HandleFunc("GET /objects", handle(srv.getObjects))
+	srv.mux.HandleFunc("GET /objects/{id}", handle(srv.getObject))
+	srv.mux.HandleFunc("POST /objects/{id}", handle(srv.gotoObject))
 
-	return &s, nil
+	return &srv, nil
 }
 
 func (s Server) Start() error {
@@ -70,69 +92,62 @@ func (s Server) Start() error {
 	return http.ListenAndServe(":8080", s.mux)
 }
 
-func (s Server) getObjects(w http.ResponseWriter, r *http.Request) {
-	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier%s"
-	var clause string
-	var args []any
-	if s := r.URL.Query().Get("search"); s != "" {
-		clause = " WHERE name LIKE ?"
-		args = append(args, fmt.Sprintf("%%%s%%", s))
-	}
+type handler func(w http.ResponseWriter, r *http.Request) error
 
-	rows, err := s.db.Query(fmt.Sprintf(q, clause), args...)
-	if err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	objs := []object{}
-	for rows.Next() {
-		var o object
-		if err := rows.Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
+func handle(f handler) func(w http.ResponseWriter, r *http.Request) {
+	var err error
+	return func(w http.ResponseWriter, r *http.Request) {
+		err = f(w, r)
+		if err != nil {
+			log.Printf("error: %f", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprint(w, err)
-			return
 		}
-		objs = append(objs, o)
 	}
-
-	json.NewEncoder(w).Encode(objs)
 }
 
-func (s Server) getObject(w http.ResponseWriter, r *http.Request) {
+func (s Server) index(w http.ResponseWriter, r *http.Request) error {
+	objs, err := s.doGetObjects(r)
+	if err != nil {
+		return err
+	}
+
+	return s.idx.ExecuteTemplate(w, "index", objects{Objects: objs})
+}
+
+func (s Server) getObjects(w http.ResponseWriter, r *http.Request) error {
+	objs, err := s.doGetObjects(r)
+	if err != nil {
+		return err
+	}
+
+	return json.NewEncoder(w).Encode(objs)
+}
+
+func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
 	obj, err := s.doGetObject(r.PathValue("id"))
 	if err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	obj.HA, err = s.mount.HourAngle(obj.RA)
 	if err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return err
 	}
 
-	json.NewEncoder(w).Encode(obj)
+	return json.NewEncoder(w).Encode(obj)
 }
 
-func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) {
+func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 	obj, err := s.doGetObject(r.PathValue("id"))
 	if err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	if err := s.mount.Goto(obj.RA, obj.Decl); err != nil {
-		fmt.Fprint(w, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return err
 	}
 
-	json.NewEncoder(w).Encode(obj)
+	return json.NewEncoder(w).Encode(obj)
 }
 
 func (s Server) doGetObject(ids string) (object, error) {
@@ -144,4 +159,35 @@ func (s Server) doGetObject(ids string) (object, error) {
 	var o object
 	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier WHERE m = ?"
 	return o, s.db.QueryRow(q, id).Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
+}
+
+func (s Server) doGetObjects(r *http.Request) ([]object, error) {
+	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier%s"
+	var clause string
+	var args []any
+	if s := r.URL.Query().Get("search"); s != "" {
+		clause = " WHERE name LIKE ?"
+		args = append(args, fmt.Sprintf("%%%s%%", s))
+	}
+
+	rows, err := s.db.Query(fmt.Sprintf(q, clause), args...)
+	if err != nil {
+		return nil, err
+	}
+
+	objs := []object{}
+	for rows.Next() {
+		var o object
+		if err := rows.Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
+			return nil, err
+		}
+		objs = append(objs, o)
+	}
+
+	return objs, nil
+}
+
+func serveStatic(w http.ResponseWriter, req *http.Request) {
+	h := http.FileServer(http.FS(static))
+	h.ServeHTTP(w, req)
 }

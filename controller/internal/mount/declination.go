@@ -43,7 +43,7 @@ func (d *Declination) move(dec string) (uint16, error) {
 
 	d.dec = dec
 
-	steps := uint16(((deg / 360) * 100 * 200) / 2)
+	steps := degreesToSteps(deg)
 	log.Printf("dec: current deg: %f, degrees: %f, steps: %d\n", currentDeg, deg, steps)
 
 	if steps < 100 {
