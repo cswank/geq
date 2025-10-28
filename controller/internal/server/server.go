@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cswank/geq/controller/internal/mount"
 	_ "modernc.org/sqlite"
@@ -35,6 +36,7 @@ type (
 		Magnitude     float64 `json:"magnitude"`
 		Name          *string `json:"name"`
 		HA            float64 `json:"ha"`
+		Visible       bool    `json:"visible"`
 	}
 
 	objects struct {
@@ -56,7 +58,11 @@ func (o object) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		n = *o.Name
 	}
-	return json.Marshal([]string{strconv.Itoa(o.ID), n})
+	return json.Marshal([]string{
+		strconv.Itoa(o.ID),
+		n,
+		fmt.Sprintf("%t", o.Visible),
+	})
 }
 
 func New(m *mount.TelescopeMount) (*Server, error) {
@@ -131,6 +137,11 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 	objs, err := s.doGetObjects(r)
 	if err != nil {
 		return err
+	}
+
+	ts := time.Now()
+	for i, obj := range objs {
+		objs[i].Visible = s.mount.Visible(obj.ID, obj.RA, obj.Decl, ts)
 	}
 
 	j, err := json.Marshal(objs)

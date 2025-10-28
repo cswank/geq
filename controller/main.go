@@ -10,6 +10,7 @@ import (
 
 var (
 	serial = kingpin.Flag("serial", "serial device").String()
+	lat    = kingpin.Flag("latitude", "latitude").Float64()
 	lon    = kingpin.Flag("longitude", "longitude").Float64()
 	dev    = kingpin.Flag("dev", "develpment mode (no mount)").Short('d').Bool()
 )
@@ -18,12 +19,14 @@ func main() {
 	kingpin.Parse()
 
 	var err error
-	var m *mount.TelescopeMount
+	var ser string
 	if !*dev {
-		m, err = mount.New(*serial, *lon, 23, 24)
-		if err != nil {
-			log.Fatal(err)
-		}
+		ser = *serial
+	}
+
+	m, err := mount.New(ser, *lat, *lon, 23, 24)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	s, err := server.New(m)

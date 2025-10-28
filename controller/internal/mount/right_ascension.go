@@ -73,6 +73,11 @@ func (r RA) hourAngle(ra string, t time.Time) (float64, error) {
 	return ((lst / 24) * 360) - deg, err
 }
 
+func (r RA) degrees(ra string) (float64, error) {
+	hours, minutes, err := hm(ra)
+	return (15 * hours) + (15 * (minutes / 60)), err
+}
+
 func (r RA) localSiderealTime(datetime time.Time) float64 {
 	gst := greenwichSiderealTime(datetime)
 

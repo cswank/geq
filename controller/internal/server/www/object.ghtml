@@ -2,21 +2,51 @@
 <html lang="en">
   <head>
     <link href="/static/mermaid.min.css" rel="stylesheet"/>
+    <style>
+     .container {
+         display: grid;
+         grid-template-columns: auto auto;
+         padding: 1px 1px 20px 1px;
+         width: 400px;
+     }
+     .container div {         
+         background-color: #f1f1f1;
+         border: 1px solid black;
+         padding: 10px;
+         font-size: 30px;
+         text-align: left;
+     }
+    </style>
   </head>
   <body>
-    <h5>M{{.ID}} {{.Name}}</h5>
+    <h2>M{{.ID}}</h2>
+    <h3>{{.Name}}</h3>
+    <div class="container">
+      <div>NGC</div>
+      <div>{{.NGC}}</div>
+      <div>MType</div>
+      <div>{{.MType}}</div>
+      <div>Constellation</div>
+      <div>{{.Constellation}}</div>
+      <div>RA</div>
+      <div>{{.RA}}</div>
+      <div>Decl</div>
+      <div>{{.Decl}}</div>
+      <div>Magnitude</div>
+      <div>{{.Magnitude}}</div>
+      <div>Hour Angle</div>
+      <div>{{.HA}}</div>
+    </div>
     <button onclick="goto()">Goto</button>
   </body>
   <script>
    function goto() {
-       fetch('/objects/{{.ID}}', {
-           method: 'POST',
-       })
-           .then(response => {
+       fetch('/objects/{{.ID}}', {method: 'POST',}).then(
+           response => {
                if (!response.ok) {
                    throw new Error('Network response was not ok');
                }
-           });
+       });
    }
   </script>
 </html>

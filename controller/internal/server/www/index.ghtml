@@ -20,7 +20,10 @@
              },
              {
                  name: "name"
-             }
+             },
+             {
+                 name: "visible"
+             },
          ],
          sort: true,
          data: {{.Objects}}
