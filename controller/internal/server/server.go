@@ -39,6 +39,11 @@ type (
 		Visible       bool    `json:"visible"`
 	}
 
+	position struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	}
+
 	objects struct {
 		Objects template.JS
 	}
@@ -111,6 +116,7 @@ func New(m *mount.TelescopeMount) (*Server, error) {
 	srv.mux.HandleFunc("GET /objects", handle(srv.getObjects))
 	srv.mux.HandleFunc("GET /objects/{id}", handle(srv.getObject))
 	srv.mux.HandleFunc("POST /objects/{id}", handle(srv.gotoObject))
+	srv.mux.HandleFunc("POST /position", handle(srv.position))
 
 	return &srv, nil
 }
@@ -190,6 +196,15 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return json.NewEncoder(w).Encode(obj)
+}
+
+func (s Server) position(w http.ResponseWriter, r *http.Request) error {
+	var p position
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		return err
+	}
+
+	return s.mount.Position(p.Latitude, p.Longitude)
 }
 
 func (s Server) doGetObject(r *http.Request) (object, error) {

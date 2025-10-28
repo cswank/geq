@@ -24,11 +24,11 @@ type (
 	}
 
 	message struct {
-		Sync      uint8
-		Address   uint8
-		RASteps   uint16
-		DeclSteps uint16
-		CRC       uint8
+		Sync             uint8
+		Address          uint8
+		RASteps          uint16
+		DeclinationSteps uint16
+		CRC              uint8
 	}
 
 	state int
@@ -41,11 +41,11 @@ const (
 	SlowSlew state = 2
 	Tracking state = 3
 
-	raMotorAddress   = 0
-	declMotorAddress = 1
+	raMotorAddress  = 0
+	decMotorAddress = 1
 )
 
-func New(device string, lat, lon float64, raPin, declPin int) (*TelescopeMount, error) {
+func New(device string, lat, lon float64, raPin, decPin int) (*TelescopeMount, error) {
 	mode := &serial.Mode{
 		BaudRate: 115200,
 		DataBits: 8,
@@ -54,10 +54,10 @@ func New(device string, lat, lon float64, raPin, declPin int) (*TelescopeMount, 
 	}
 
 	var (
-		err       error
-		port      serial.Port
-		raMotor   *tmc2209.Motor
-		declMotor *tmc2209.Motor
+		err      error
+		port     serial.Port
+		raMotor  *tmc2209.Motor
+		decMotor *tmc2209.Motor
 	)
 	if device != "" {
 		port, err := serial.Open(device, mode)
@@ -70,8 +70,8 @@ func New(device string, lat, lon float64, raPin, declPin int) (*TelescopeMount, 
 			log.Fatal(err)
 		}
 
-		declMotor = tmc2209.New(port, declMotorAddress, 200, 1)
-		if err := declMotor.Setup(tmc2209.SpreadCycle()...); err != nil {
+		decMotor = tmc2209.New(port, decMotorAddress, 200, 1)
+		if err := decMotor.Setup(tmc2209.SpreadCycle()...); err != nil {
 			log.Fatal(err)
 		}
 
@@ -83,7 +83,7 @@ func New(device string, lat, lon float64, raPin, declPin int) (*TelescopeMount, 
 		port:     port,
 		latitude: lat,
 		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ra: "02:31.8116667", longitude: lon},
-		dec:      Declination{dec: "89:15.85", lock: &lock, motor: declMotor},
+		dec:      Declination{dec: "89:15.85", lock: &lock, motor: decMotor},
 	}
 
 	if device != "" {
@@ -92,13 +92,18 @@ func New(device string, lat, lon float64, raPin, declPin int) (*TelescopeMount, 
 			return nil, err
 		}
 
-		t.dec.line, err = gpiocdev.RequestLine("gpiochip0", declPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.dec.listen))
+		t.dec.line, err = gpiocdev.RequestLine("gpiochip0", decPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.dec.listen))
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &t, nil
+}
+
+func (t *TelescopeMount) Position(lat, lon float64) {
+	t.latitude = lat
+	t.ra.longitude = lon
 }
 
 func (t *TelescopeMount) Goto(ra, dec string) error {
@@ -124,29 +129,21 @@ func (t *TelescopeMount) HourAngle(ra string) (float64, error) {
 	return t.ra.hourAngle(ra, time.Now())
 }
 
-/*
-1. RA min: 0h.
-2. RA max: 24h.
-All hours of Right Ascension are visible within 32 degrees of the celestial pole. :-)
-3. Dec min = latitude - 90
-4. Dec max = 90 degrees. The celestial pole is visible.
-*/
 func (t TelescopeMount) Visible(id int, ra, dec string, ts time.Time) bool {
 	lst := t.ra.localSiderealTime(ts)
 	hours, minutes, _ := hm(ra)
 	raH := hours + (minutes / 60)
 	decDeg, _ := t.dec.degrees(dec)
-	fmt.Printf("id: %d, lst: %f, ra: %s, ra: %f, dec: %s, dec: %f\n", id, lst, ra, raH, dec, decDeg)
 	return (math.Abs(lst-raH) < 6) && decDeg < (90-t.latitude)
 }
 
 // count sends the ra and decl steps to mcu that actually does the counting
-func (t *TelescopeMount) count(ra, decl uint16) error {
+func (t *TelescopeMount) count(ra, dec uint16) error {
 	msg := message{
-		Sync:      0x5,
-		Address:   0x11,
-		RASteps:   ra,
-		DeclSteps: decl,
+		Sync:             0x5,
+		Address:          0x11,
+		RASteps:          ra,
+		DeclinationSteps: dec,
 	}
 
 	buf := make([]byte, 8)
@@ -155,8 +152,7 @@ func (t *TelescopeMount) count(ra, decl uint16) error {
 		return err
 	}
 
-	n, err := t.port.Write(buf)
-	log.Printf("uart write %d (%v)\n", n, err)
+	_, err = t.port.Write(buf)
 	return err
 
 }
