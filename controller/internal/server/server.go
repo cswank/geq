@@ -139,11 +139,6 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	ts := time.Now()
-	for i, obj := range objs {
-		objs[i].Visible = s.mount.Visible(obj.ID, obj.RA, obj.Decl, ts)
-	}
-
 	j, err := json.Marshal(objs)
 	if err != nil {
 		return err
@@ -209,6 +204,7 @@ func (s Server) doGetObject(r *http.Request) (object, error) {
 }
 
 func (s Server) doGetObjects(r *http.Request) ([]object, error) {
+	ts := time.Now()
 	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier%s"
 	var clause string
 	var args []any
@@ -222,13 +218,19 @@ func (s Server) doGetObjects(r *http.Request) ([]object, error) {
 		return nil, err
 	}
 
+	vis := r.URL.Query().Get("visible") == "true"
+
 	objs := []object{}
 	for rows.Next() {
 		var o object
 		if err := rows.Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
 			return nil, err
 		}
-		objs = append(objs, o)
+
+		o.Visible = s.mount.Visible(o.ID, o.RA, o.Decl, ts)
+		if !vis || o.Visible {
+			objs = append(objs, o)
+		}
 	}
 
 	return objs, nil
