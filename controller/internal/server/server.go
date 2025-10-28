@@ -204,7 +204,8 @@ func (s Server) position(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return s.mount.Position(p.Latitude, p.Longitude)
+	s.mount.Position(p.Latitude, p.Longitude)
+	return nil
 }
 
 func (s Server) doGetObject(r *http.Request) (object, error) {
