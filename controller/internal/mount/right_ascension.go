@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	J1970 float64 = 2440587.5
+	j1970         float64 = 2440587.5
+	trackingSpeed float64 = 100 / (24 * 60)
 )
 
 type (
@@ -73,11 +74,6 @@ func (r RA) hourAngle(ra string, t time.Time) (float64, error) {
 	return ((lst / 24) * 360) - deg, err
 }
 
-func (r RA) degrees(ra string) (float64, error) {
-	hours, minutes, err := hm(ra)
-	return (15 * hours) + (15 * (minutes / 60)), err
-}
-
 func (r RA) localSiderealTime(datetime time.Time) float64 {
 	gst := greenwichSiderealTime(datetime)
 
@@ -108,8 +104,7 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 		r.state++
 		//TODO: set motor microsteps to 256 (must use microsteps = 1 because the pico counter can't keep up with 256 during slew)
 
-		// I THINK this is how fast it should move with 100:1 gear reduction
-		if err := r.motor.Move(0.0011574 * r.direction); err != nil {
+		if err := r.motor.Move(trackingSpeed * r.direction); err != nil {
 			r.start = time.Now()
 			log.Printf("error tracking motor: %s", err)
 		}
@@ -141,7 +136,7 @@ func greenwichSiderealTime(datetime time.Time) float64 {
 
 func julianDate(datetime time.Time) float64 {
 	var time int64 = datetime.UTC().UnixNano() / 1e6
-	return float64(time)/86400000.0 + J1970
+	return float64(time)/86400000.0 + j1970
 }
 
 func hm(s string) (float64, float64, error) {

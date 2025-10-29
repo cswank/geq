@@ -129,14 +129,10 @@ func (t *TelescopeMount) HourAngle(ra string) (float64, error) {
 	return t.ra.hourAngle(ra, time.Now())
 }
 
-// The star is circumpolar if θ + δ is greater than +90°
 func (t TelescopeMount) Visible(id int, ra, dec string, ts time.Time) bool {
-	lst := t.ra.localSiderealTime(ts)
-	hours, minutes, _ := hm(ra)
-	raH := hours + (minutes / 60)
+	ha, _ := t.ra.hourAngle(ra, ts)
 	decDeg, _ := t.dec.degrees(dec)
-	//fmt.Printf("id: %d, lst: %f, ra: %s, ra: %f, dec: %s, dec: %f\n", id, lst, ra, raH, dec, decDeg)
-	return t.latitude+decDeg > 90 || ((math.Abs(lst-raH) < 6) && decDeg < (90-t.latitude))
+	return decDeg > 90-t.latitude || math.Cos(rad(ha)) > -1*math.Tan(rad(t.latitude))*math.Tan(rad(decDeg))
 }
 
 // count sends the ra and decl steps to mcu that actually does the counting
@@ -194,4 +190,8 @@ func splitCoord(s string) ([]string, error) {
 
 func degreesToSteps(deg float64) uint16 {
 	return uint16(((deg / 360) * 100 * 200) / 2)
+}
+
+func rad(d float64) float64 {
+	return d * (math.Pi / 180)
 }
