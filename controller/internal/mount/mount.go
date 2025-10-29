@@ -131,8 +131,8 @@ func (t *TelescopeMount) HourAngle(ra string) (float64, error) {
 
 func (t TelescopeMount) Visible(id int, ra, dec string, ts time.Time) bool {
 	ha, _ := t.ra.hourAngle(ra, ts)
-	decDeg, _ := t.dec.degrees(dec)
-	return decDeg > 90-t.latitude || math.Cos(rad(ha)) > -1*math.Tan(rad(t.latitude))*math.Tan(rad(decDeg))
+	deg, _ := t.dec.degrees(dec)
+	return t.circumpolar(deg) || t.aboveHorizon(ha, deg)
 }
 
 // count sends the ra and decl steps to mcu that actually does the counting
@@ -159,6 +159,14 @@ func (t TelescopeMount) Close() {
 	t.port.Close()
 	t.ra.line.Close()
 	t.dec.line.Close()
+}
+
+func (t TelescopeMount) aboveHorizon(ha, dec float64) bool {
+	return math.Cos(rad(ha)) > -1*math.Tan(rad(t.latitude))*math.Tan(rad(dec))
+}
+
+func (t TelescopeMount) circumpolar(dec float64) bool {
+	return dec > 90-t.latitude
 }
 
 func parseFloats(in ...string) ([]float64, error) {
