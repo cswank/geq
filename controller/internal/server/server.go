@@ -36,6 +36,7 @@ type (
 		Magnitude     float64 `json:"magnitude"`
 		Name          *string `json:"name"`
 		HA            float64 `json:"ha"`
+		HourAngle     string  `json:"hour_angle"`
 		Visible       bool    `json:"visible"`
 	}
 
@@ -159,11 +160,7 @@ func (s Server) object(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	o.HA, err = s.mount.HourAngle(o.RA)
-	if err != nil {
-		return err
-	}
-
+	o.HourAngle = s.mount.HourAngle(o.RA)
 	return s.obj.ExecuteTemplate(w, "object", o)
 }
 
@@ -182,10 +179,7 @@ func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	obj.HA, err = s.mount.HourAngle(obj.RA)
-	if err != nil {
-		return err
-	}
+	obj.HourAngle = s.mount.HourAngle(obj.RA)
 
 	return json.NewEncoder(w).Encode(obj)
 }

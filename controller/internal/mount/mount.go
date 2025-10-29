@@ -125,8 +125,15 @@ func (t *TelescopeMount) Goto(ra, dec string) error {
 	return t.count(rSteps, dSteps)
 }
 
-func (t *TelescopeMount) HourAngle(ra string) (float64, error) {
-	return t.ra.hourAngle(ra, time.Now())
+func (t *TelescopeMount) HourAngle(ra string) string {
+	lst := t.ra.localSiderealTime(time.Now())
+	hours, minutes, _ := hm(ra)
+	hours += minutes / 60
+	ha := lst - hours
+	hah := math.Floor(ha)
+	ham := (ha - hah) * 60
+
+	return fmt.Sprintf("%02d:%02d", int(hah), int(ham))
 }
 
 func (t TelescopeMount) Visible(id int, ra, dec string, ts time.Time) bool {
