@@ -8,21 +8,24 @@
     <script src="/static/grid.umd.js"></script>
     <script>
      new gridjs.Grid({
+         search: true,
          columns: [
              {
                  name: "id",
                  width: "100px",
-                 formatter: (cell, row) => {
+                 formatter: (cell) => {
                      return gridjs.html(
                          `<a href='/${cell}'>M${cell}</a>`
                      );
                  }
              },
              {
-                 name: "name"
+                 name: "visible",
+                 width: "100px",
+                 filter: true
              },
              {
-                 name: "visible"
+                 name: "name"
              },
          ],
          sort: true,

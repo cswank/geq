@@ -65,8 +65,8 @@ func (o object) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal([]string{
 		strconv.Itoa(o.ID),
-		n,
 		fmt.Sprintf("%t", o.Visible),
+		n,
 	})
 }
 
@@ -155,6 +155,11 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 
 func (s Server) object(w http.ResponseWriter, r *http.Request) error {
 	o, err := s.doGetObject(r)
+	if err != nil {
+		return err
+	}
+
+	o.HA, err = s.mount.HourAngle(o.RA)
 	if err != nil {
 		return err
 	}

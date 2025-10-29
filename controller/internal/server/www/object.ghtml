@@ -35,7 +35,7 @@
       <div>Magnitude</div>
       <div>{{.Magnitude}}</div>
       <div>Hour Angle</div>
-      <div>{{.HA}}</div>
+      <div>{{printf "%.2f" .HA}}</div>
     </div>
     <button onclick="goto()">Goto</button>
   </body>
