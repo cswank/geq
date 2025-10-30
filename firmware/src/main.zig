@@ -27,7 +27,7 @@ pub const microzig_options = microzig.Options{
 var ra_steps: u16 = undefined;
 
 var core1_stack: [1024]u32 = undefined;
-var buf: [256]u8 = .{0} ** 256;
+var buf: [512]u8 = .{0} ** 512;
 const address: u8 = 0x11;
 
 var timeout = time.Duration.from_ms(100);
@@ -76,12 +76,12 @@ fn recv() !message {
 }
 
 fn read() !void {
-    buf = .{0} ** 256;
+    buf = .{0} ** 512;
 
     var to: ?time.Duration = null;
 
     var idx: usize = 0;
-    while (idx < 256) {
+    while (idx < 512) {
         _ = uart2.read_blocking(buf[idx .. idx + 8], to) catch |err| {
             uart2.clear_errors();
             if (err != error.Timeout) {
