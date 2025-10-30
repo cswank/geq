@@ -1,6 +1,7 @@
 package mount
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -69,6 +70,7 @@ func (r *RA) move(ra string, t time.Time) (uint16, error) {
 
 func (r RA) hourAngle(ra string, t time.Time) (float64, error) {
 	lst := r.localSiderealTime(t)
+	fmt.Println(lst)
 	hours, minutes, err := hm(ra)
 	deg := (15 * hours) + (15 * (minutes / 60))
 	return ((lst / 24) * 360) - deg, err

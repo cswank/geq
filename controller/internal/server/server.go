@@ -53,9 +53,10 @@ type (
 		db    *sql.DB
 		f     *vfs.FS
 		mux   *http.ServeMux
-		mount *mount.TelescopeMount
+		mount *mount.Telescope
 		idx   *template.Template
 		obj   *template.Template
+		pos   *template.Template
 	}
 )
 
@@ -67,11 +68,12 @@ func (o object) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]string{
 		strconv.Itoa(o.ID),
 		fmt.Sprintf("%t", o.Visible),
+		o.HourAngle,
 		n,
 	})
 }
 
-func New(m *mount.TelescopeMount) (*Server, error) {
+func New(m *mount.Telescope) (*Server, error) {
 	fn, f, err := vfs.New(dbf)
 	if err != nil {
 		return nil, err
@@ -102,9 +104,20 @@ func New(m *mount.TelescopeMount) (*Server, error) {
 		return nil, err
 	}
 
+	s, err = static.ReadFile("www/position.ghtml")
+	if err != nil {
+		return nil, err
+	}
+
+	pos, err := template.New("position").Parse(string(s))
+	if err != nil {
+		return nil, err
+	}
+
 	srv := Server{
 		idx:   idx,
 		obj:   obj,
+		pos:   pos,
 		f:     f,
 		db:    db,
 		mount: m,
@@ -141,6 +154,12 @@ func handle(f handler) func(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) index(w http.ResponseWriter, r *http.Request) error {
+	lat, lon := s.mount.GetPosition()
+	fmt.Println(lat, lon)
+	if lat == 0 && lon == 0 {
+		return s.pos.ExecuteTemplate(w, "position", nil)
+	}
+
 	objs, err := s.doGetObjects(r)
 	if err != nil {
 		return err
@@ -160,7 +179,7 @@ func (s Server) object(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	o.HourAngle = s.mount.HourAngle(o.RA)
+	o.HourAngle = s.mount.HourAngle(o.RA, time.Now())
 	return s.obj.ExecuteTemplate(w, "object", o)
 }
 
@@ -179,7 +198,7 @@ func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	obj.HourAngle = s.mount.HourAngle(obj.RA)
+	obj.HourAngle = s.mount.HourAngle(obj.RA, time.Now())
 
 	return json.NewEncoder(w).Encode(obj)
 }
@@ -197,7 +216,7 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 	return json.NewEncoder(w).Encode(obj)
 }
 
-func (s Server) position(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) position(w http.ResponseWriter, r *http.Request) error {
 	var p position
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		return err
@@ -243,6 +262,7 @@ func (s Server) doGetObjects(r *http.Request) ([]object, error) {
 		}
 
 		o.Visible = s.mount.Visible(o.ID, o.RA, o.Decl, ts)
+		o.HourAngle = s.mount.HourAngle(o.RA, ts)
 		if !vis || o.Visible {
 			objs = append(objs, o)
 		}

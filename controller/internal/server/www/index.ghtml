@@ -25,6 +25,10 @@
                  filter: true
              },
              {
+                 name: "hour angle",
+                 width: "100px",
+             },
+             {
                  name: "name"
              },
          ],

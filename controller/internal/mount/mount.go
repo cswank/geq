@@ -16,7 +16,7 @@ import (
 )
 
 type (
-	TelescopeMount struct {
+	Telescope struct {
 		port     serial.Port
 		latitude float64
 		ra       RA
@@ -45,7 +45,7 @@ const (
 	decMotorAddress = 1
 )
 
-func New(device string, lat, lon float64, raPin, decPin int) (*TelescopeMount, error) {
+func New(device string, lat, lon float64, raPin, decPin int) (*Telescope, error) {
 	mode := &serial.Mode{
 		BaudRate: 115200,
 		DataBits: 8,
@@ -79,7 +79,7 @@ func New(device string, lat, lon float64, raPin, decPin int) (*TelescopeMount, e
 
 	var lock sync.Mutex
 
-	t := TelescopeMount{
+	t := Telescope{
 		port:     port,
 		latitude: lat,
 		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ra: "02:31.8116667", longitude: lon},
@@ -101,12 +101,16 @@ func New(device string, lat, lon float64, raPin, decPin int) (*TelescopeMount, e
 	return &t, nil
 }
 
-func (t *TelescopeMount) Position(lat, lon float64) {
+func (t *Telescope) Position(lat, lon float64) {
 	t.latitude = lat
 	t.ra.longitude = lon
 }
 
-func (t *TelescopeMount) Goto(ra, dec string) error {
+func (t *Telescope) GetPosition() (float64, float64) {
+	return t.latitude, t.ra.longitude
+}
+
+func (t *Telescope) Goto(ra, dec string) error {
 	if t.ra.state == Slew || t.ra.state == SlowSlew || t.dec.state == Slew || t.dec.state == SlowSlew {
 		return fmt.Errorf("refusing to goto object while the mount is slewing")
 	}
@@ -125,8 +129,8 @@ func (t *TelescopeMount) Goto(ra, dec string) error {
 	return t.count(rSteps, dSteps)
 }
 
-func (t *TelescopeMount) HourAngle(ra string) string {
-	lst := t.ra.localSiderealTime(time.Now())
+func (t *Telescope) HourAngle(ra string, ts time.Time) string {
+	lst := t.ra.localSiderealTime(ts)
 	hours, minutes, _ := hm(ra)
 	hours += minutes / 60
 	ha := lst - hours
@@ -136,14 +140,14 @@ func (t *TelescopeMount) HourAngle(ra string) string {
 	return fmt.Sprintf("%02d:%02d", int(hah), int(ham))
 }
 
-func (t TelescopeMount) Visible(id int, ra, dec string, ts time.Time) bool {
+func (t Telescope) Visible(id int, ra, dec string, ts time.Time) bool {
 	ha, _ := t.ra.hourAngle(ra, ts)
 	deg, _ := t.dec.degrees(dec)
 	return t.circumpolar(deg) || t.aboveHorizon(ha, deg)
 }
 
 // count sends the ra and decl steps to mcu that actually does the counting
-func (t *TelescopeMount) count(ra, dec uint16) error {
+func (t *Telescope) count(ra, dec uint16) error {
 	msg := message{
 		Sync:             0x5,
 		Address:          0x11,
@@ -162,17 +166,17 @@ func (t *TelescopeMount) count(ra, dec uint16) error {
 
 }
 
-func (t TelescopeMount) Close() {
+func (t Telescope) Close() {
 	t.port.Close()
 	t.ra.line.Close()
 	t.dec.line.Close()
 }
 
-func (t TelescopeMount) aboveHorizon(ha, dec float64) bool {
+func (t Telescope) aboveHorizon(ha, dec float64) bool {
 	return math.Cos(rad(ha)) > -1*math.Tan(rad(t.latitude))*math.Tan(rad(dec))
 }
 
-func (t TelescopeMount) circumpolar(dec float64) bool {
+func (t Telescope) circumpolar(dec float64) bool {
 	return dec > 90-t.latitude
 }
 
