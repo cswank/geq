@@ -90,5 +90,5 @@ func (d *Declination) listen(evt gpiocdev.LineEvent) {
 		}
 	}
 
-pp	d.lock.Unlock()
+	d.lock.Unlock()
 }

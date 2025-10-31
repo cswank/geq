@@ -163,7 +163,7 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 	lat, lon := s.mount.GetCoordinates()
 	fmt.Println(lat, lon)
 	if lat == 0 && lon == 0 {
-		return s.set.ExecuteTemplate(w, "position", nil)
+		return s.set.ExecuteTemplate(w, "setup", nil)
 	}
 
 	objs, err := s.doGetObjects(r)
