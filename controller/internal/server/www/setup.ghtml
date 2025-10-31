@@ -34,7 +34,7 @@
   <body>
     <div class="axes">
       <div>Right Ascension</div>
-      <div><button class="speed" type="text" onclick="move('ra', -1)">-</button></div>      
+      <div><button class="speed" type="text" onclick="move('ra', -1)">-</button></div>
       <div><button class="speed" type="text" onclick="move('ra', 0)">stop</button></div>
       <div><button class="speed" type="text" onclick="move('ra', 1)">+</button></div>
       <div>Declination</div>
@@ -51,63 +51,46 @@
     <button onclick="coords()">Submit</button>
   </body>
   <script>
-    var axes = {
-      'ra': 0,
-      'dec': 0,      
-    };
+   var axes = {
+       'ra': 0,
+       'dec': 0,
+   };
 
-    function move(axis, speed) {
-      if (speed == 0) {
-        axes[axis] = 0;
-      }  else {
-        axes[axis] += speed;
-      }
-      
-      const data = {
-        hz: axes[axis]
-      };
+   function move(axis, speed) {
+       if (speed == 0) {
+           axes[axis] = 0;
+       }  else {
+           axes[axis] += speed;
+       }
 
-      const request = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      };
+       post(`/${axis}`, {hz: axes[axis]}, null);
+   }
 
-      fetch(`/${axis}`, request).then(
-        response => {
-          if (!response.ok) {
-            throw new Error('Network response was not ok');                   
-          }
-        });
-    }
+   function coords() {
+       const lat = document.getElementById('latitude');
+       const lon = document.getElementById('longitude');
+       const data = {latitude: parseFloat(lat.value), longitude: parseFloat(lon.value)};
+       post('/coordinates', data, '/');
+   }
 
-    function coords() {
-      const lat = document.getElementById('latitude');
-      const lon = document.getElementById('longitude');
-      const data = {
-        latitude: parseFloat(lat.value),
-        longitude: parseFloat(lon.value)
-      };
+   function post(url, data, loc) {
+       const = req {
+           method: 'POST',
+           headers: {'Content-Type': 'application/json'},
+           body: JSON.stringify(data)
+       };
 
-      const request = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      };
-
-      fetch('/position', request).then(
-        response => {
-          if (response.ok) {
-            window.location.href = '/';
-          } else {
-            throw new Error('Network response was not ok');                   
-          }
-        });
-    }
+       fetch(url, req).then(
+           response => {
+               if (response.ok) {
+                   if (loc) {
+                       window.location.href = loc;
+                   }
+               } else {
+                   throw new Error('Network response was not ok');
+               }
+       });
+   }
   </script>
 </html>
 

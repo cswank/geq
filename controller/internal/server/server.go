@@ -134,7 +134,8 @@ func New(m *mount.Telescope) (*Server, error) {
 	srv.mux.HandleFunc("GET /objects", handle(srv.getObjects))
 	srv.mux.HandleFunc("GET /objects/{id}", handle(srv.getObject))
 	srv.mux.HandleFunc("POST /objects/{id}", handle(srv.gotoObject))
-	srv.mux.HandleFunc("POST /setup", handle(srv.coordinates))
+	srv.mux.HandleFunc("GET /setup", handle(srv.setup))
+	srv.mux.HandleFunc("POST /coordinates", handle(srv.coordinates))
 	srv.mux.HandleFunc("POST /ra", handle(srv.move))
 	srv.mux.HandleFunc("POST /dec", handle(srv.move))
 
@@ -161,9 +162,8 @@ func handle(f handler) func(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 	lat, lon := s.mount.GetCoordinates()
-	fmt.Println(lat, lon)
 	if lat == 0 && lon == 0 {
-		return s.set.ExecuteTemplate(w, "setup", nil)
+		return s.setup(w, r)
 	}
 
 	objs, err := s.doGetObjects(r)
@@ -177,6 +177,10 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return s.idx.ExecuteTemplate(w, "index", objects{Objects: template.JS(j)})
+}
+
+func (s Server) setup(w http.ResponseWriter, r *http.Request) error {
+	return s.set.ExecuteTemplate(w, "setup", nil)
 }
 
 func (s Server) object(w http.ResponseWriter, r *http.Request) error {
