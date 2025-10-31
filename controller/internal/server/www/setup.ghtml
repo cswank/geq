@@ -74,7 +74,7 @@
    }
 
    function post(url, data, loc) {
-       const = req {
+       const req = {
            method: 'POST',
            headers: {'Content-Type': 'application/json'},
            body: JSON.stringify(data)
