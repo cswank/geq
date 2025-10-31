@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <style>
+     .coords {
+         display: grid;
+         grid-template-columns: auto auto;
+         padding: 1px 1px 20px 1px;
+         width: 400px;
+     }
+     .coords div {         
+         padding: 10px;
+         font-size: 20px;
+         text-align: left;
+     }
+
+     .axes {
+         display: grid;
+         grid-template-columns: auto auto auto;
+         padding: 1px 1px 20px 1px;
+         width: 400px;
+     }
+     .axes div {         
+         padding: 10px;
+         font-size: 20px;
+         text-align: left;
+     }
+
+     .speed button {         
+         font-size: 40px;
+     }
+    </style>
+  </head>
+  <body>
+    <div class="coords">
+      <div>Latitude</div>
+      <div><input type="text" id="latitude"/></div>
+      <div>Longitude</div>
+      <div><input type="text" id="longitude"/></div>
+    </div>
+    <button onclick="coords()">Submit</button>
+    
+    <div class="axes">
+      <div>Right Ascension</div>
+      <div><button class="speed" type="text" onclick="move('ra', 1)">+</button></div>
+      <div><button class="speed" type="text" onclick="move('ra', -1)">-</button></div>
+      <div>Declination</div>
+      <div><button class="speed" type="text" onclick="move('dec', 1)">+</button></div>
+      <div><button class="speed" type="text" onclick="move('dec', -1)">-</button></div>
+    </div>
+  </body>
+  <script>
+   var axes = {
+       'ra': 0,
+       'dec': 0,
+       
+   };
+   var raHz = 0;
+   var decHz = 0;
+   function move(axis, speed) {
+       axes[axis] += speed
+       
+       const data = {
+           hz: axes[axis]
+       };
+
+       const request = {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json'
+           },
+           body: JSON.stringify(data)
+       };
+
+       fetch('/{axis}', request).then(
+           response => {
+               if (response.ok) {
+                   window.location.href = '/';
+               } else {
+                   throw new Error('Network response was not ok');                   
+               }
+       });
+   }
+
+   function coords() {
+       const lat = document.getElementById('latitude');
+       const lon = document.getElementById('longitude');
+       const data = {
+           latitude: parseFloat(lat.value),
+           longitude: parseFloat(lon.value)
+       };
+
+       const request = {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json'
+           },
+           body: JSON.stringify(data)
+       };
+
+       fetch('/position', request).then(
+           response => {
+               if (response.ok) {
+                   window.location.href = '/';
+               } else {
+                   throw new Error('Network response was not ok');                   
+               }
+       });
+   }
+  </script>
+</html>
+

@@ -10,18 +10,23 @@ import (
 
 type (
 	Declination struct {
-		lock      *sync.Mutex
-		motor     *tmc2209.Motor
-		line      *gpiocdev.Line
-		address   int
-		state     state
-		dec       string
-		direction float64
+		lock       *sync.Mutex
+		motor      *tmc2209.Motor
+		line       *gpiocdev.Line
+		address    int
+		state      state
+		dec        string
+		direction  float64
+		microsteps int
 	}
 )
 
-// TODO: make sure motor always moves back accross polaris when slewing
-func (d *Declination) move(dec string) (uint16, error) {
+func (d *Declination) slewing() bool {
+	return d.state == Slew || d.state == SlowSlew
+}
+
+// TODO: make sure motor always moves back across local meridian when slewing
+func (d *Declination) slew(dec string) (uint16, error) {
 	currentDeg, err := d.degrees(d.dec)
 	if err != nil {
 		return 0, err
@@ -79,11 +84,11 @@ func (d *Declination) listen(evt gpiocdev.LineEvent) {
 			log.Printf("error slowing down motor: %s", err)
 		}
 	default:
-		d.state = 0
+		d.state = Idle
 		if err := d.motor.Move(0 * d.direction); err != nil {
-			log.Printf("error tracking motor: %s", err)
+			log.Printf("error stopping motor: %s", err)
 		}
 	}
 
-	d.lock.Unlock()
+pp	d.lock.Unlock()
 }

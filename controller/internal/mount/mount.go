@@ -101,27 +101,38 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Telescope, error)
 	return &t, nil
 }
 
-func (t *Telescope) Position(lat, lon float64) {
+func (t *Telescope) Coordinates(lat, lon float64) {
 	t.latitude = lat
 	t.ra.longitude = lon
 }
 
-func (t *Telescope) GetPosition() (float64, float64) {
+func (t *Telescope) GetCoordinates() (float64, float64) {
 	return t.latitude, t.ra.longitude
 }
 
+func (t *Telescope) Move(axis string, hz float64) error {
+	switch axis {
+	case "ra":
+		return t.ra.motor.Move(hz)
+	case "dec":
+		return t.dec.motor.Move(hz)
+	}
+
+	return nil
+}
+
 func (t *Telescope) Goto(ra, dec string) error {
-	if t.ra.state == Slew || t.ra.state == SlowSlew || t.dec.state == Slew || t.dec.state == SlowSlew {
+	if t.ra.slewing() || t.dec.slewing() {
 		return fmt.Errorf("refusing to goto object while the mount is slewing")
 	}
 
 	ts := time.Now()
-	rSteps, err := t.ra.move(ra, ts)
+	rSteps, err := t.ra.slew(ra, ts)
 	if err != nil {
 		return err
 	}
 
-	dSteps, err := t.dec.move(dec)
+	dSteps, err := t.dec.slew(dec)
 	if err != nil {
 		return err
 	}
