@@ -27,7 +27,7 @@ pub const microzig_options = microzig.Options{
 var ra_steps: u16 = undefined;
 
 var core1_stack: [1024]u32 = undefined;
-var buf: [512]u8 = .{0} ** 512;
+var buf: [256]u8 = .{0} ** 256;
 const address: u8 = 0x11;
 
 var timeout = time.Duration.from_ms(100);
@@ -56,10 +56,9 @@ pub fn main() !void {
         std.log.debug("address: {d}, steps: {d}", .{ msg.address, msg.right_ascension_steps });
 
         ra_steps = msg.right_ascension_steps;
-
         mc.fifo.write_blocking(1);
-
         count(msg.declination_steps, dec_output, dec_index);
+        _ = mc.fifo.read_blocking();
     }
 }
 
@@ -76,12 +75,12 @@ fn recv() !message {
 }
 
 fn read() !void {
-    buf = .{0} ** 512;
+    buf = .{0} ** 256;
 
     var to: ?time.Duration = null;
 
     var idx: usize = 0;
-    while (idx < 512) {
+    while (idx < 256) {
         _ = uart2.read_blocking(buf[idx .. idx + 8], to) catch |err| {
             uart2.clear_errors();
             if (err != error.Timeout) {
@@ -98,11 +97,11 @@ fn ra_counter() void {
     while (true) {
         _ = mc.fifo.read_blocking();
         count(ra_steps, ra_output, ra_index);
+        mc.fifo.write_blocking(1);
     }
 }
 
 fn count(target: u16, output: gpio.Pin, index: gpio.Pin) void {
-    std.log.debug("count", .{});
     var i: u32 = 0;
     var state: u1 = 0;
 
@@ -121,7 +120,6 @@ fn count(target: u16, output: gpio.Pin, index: gpio.Pin) void {
         }
     }
 
-    std.log.debug("stop", .{});
     output.toggle(); //tell controller to stop
 }
 

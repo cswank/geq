@@ -60,7 +60,7 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Telescope, error)
 		decMotor *tmc2209.Motor
 	)
 	if device != "" {
-		port, err := serial.Open(device, mode)
+		port, err = serial.Open(device, mode)
 		if err != nil {
 			log.Fatalf("unable to open serial port: %s", err)
 		}

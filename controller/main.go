@@ -20,6 +20,7 @@ func main() {
 
 	var err error
 	var ser string
+
 	if !*dev {
 		ser = *serial
 	}
