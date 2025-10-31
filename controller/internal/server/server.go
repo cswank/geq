@@ -45,6 +45,10 @@ type (
 		Longitude float64 `json:"longitude"`
 	}
 
+	movement struct {
+		Hz float64 `json:"hz"`
+	}
+
 	objects struct {
 		Objects template.JS
 	}
@@ -56,7 +60,7 @@ type (
 		mount *mount.Telescope
 		idx   *template.Template
 		obj   *template.Template
-		pos   *template.Template
+		set   *template.Template
 	}
 )
 
@@ -104,12 +108,12 @@ func New(m *mount.Telescope) (*Server, error) {
 		return nil, err
 	}
 
-	s, err = static.ReadFile("www/position.ghtml")
+	s, err = static.ReadFile("www/setup.ghtml")
 	if err != nil {
 		return nil, err
 	}
 
-	pos, err := template.New("position").Parse(string(s))
+	pos, err := template.New("setup").Parse(string(s))
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +121,7 @@ func New(m *mount.Telescope) (*Server, error) {
 	srv := Server{
 		idx:   idx,
 		obj:   obj,
-		pos:   pos,
+		set:   pos,
 		f:     f,
 		db:    db,
 		mount: m,
@@ -130,7 +134,9 @@ func New(m *mount.Telescope) (*Server, error) {
 	srv.mux.HandleFunc("GET /objects", handle(srv.getObjects))
 	srv.mux.HandleFunc("GET /objects/{id}", handle(srv.getObject))
 	srv.mux.HandleFunc("POST /objects/{id}", handle(srv.gotoObject))
-	srv.mux.HandleFunc("POST /position", handle(srv.position))
+	srv.mux.HandleFunc("POST /setup", handle(srv.coordinates))
+	srv.mux.HandleFunc("POST /ra", handle(srv.move))
+	srv.mux.HandleFunc("POST /dec", handle(srv.move))
 
 	return &srv, nil
 }
@@ -154,10 +160,10 @@ func handle(f handler) func(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s Server) index(w http.ResponseWriter, r *http.Request) error {
-	lat, lon := s.mount.GetPosition()
+	lat, lon := s.mount.GetCoordinates()
 	fmt.Println(lat, lon)
 	if lat == 0 && lon == 0 {
-		return s.pos.ExecuteTemplate(w, "position", nil)
+		return s.set.ExecuteTemplate(w, "setup", nil)
 	}
 
 	objs, err := s.doGetObjects(r)
@@ -216,14 +222,23 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 	return json.NewEncoder(w).Encode(obj)
 }
 
-func (s *Server) position(w http.ResponseWriter, r *http.Request) error {
+func (s *Server) coordinates(w http.ResponseWriter, r *http.Request) error {
 	var p position
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		return err
 	}
 
-	s.mount.Position(p.Latitude, p.Longitude)
+	s.mount.Coordinates(p.Latitude, p.Longitude)
 	return nil
+}
+
+func (s *Server) move(w http.ResponseWriter, r *http.Request) error {
+	var m movement
+	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+		return err
+	}
+
+	return s.mount.Move(strings.ReplaceAll(r.URL.Path, "/", ""), m.Hz)
 }
 
 func (s Server) doGetObject(r *http.Request) (object, error) {

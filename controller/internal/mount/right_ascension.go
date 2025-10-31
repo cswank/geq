@@ -18,18 +18,23 @@ const (
 
 type (
 	RA struct {
-		lock      *sync.Mutex
-		motor     *tmc2209.Motor
-		line      *gpiocdev.Line
-		longitude float64
-		state     state
-		start     time.Time
-		ra        string
-		direction float64
+		lock       *sync.Mutex
+		motor      *tmc2209.Motor
+		line       *gpiocdev.Line
+		longitude  float64
+		state      state
+		start      time.Time
+		ra         string
+		direction  float64
+		microsteps int
 	}
 )
 
-func (r *RA) move(ra string, t time.Time) (uint16, error) {
+func (r *RA) slewing() bool {
+	return r.state == Slew || r.state == SlowSlew
+}
+
+func (r *RA) slew(ra string, t time.Time) (uint16, error) {
 	currentHA, err := r.hourAngle(r.ra, t)
 	if err != nil {
 		return 0, err
@@ -94,6 +99,9 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 	switch r.state {
 	case Ready:
 		r.state++
+		if err := r.motor.Microsteps(1); err != nil {
+			log.Printf("error setting microsteps: %s", err)
+		}
 		if err := r.motor.Move(5 * r.direction); err != nil {
 			log.Printf("error starting motor")
 		}
@@ -104,13 +112,15 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 		}
 	case SlowSlew:
 		r.state++
-		//TODO: set motor microsteps to 256 (must use microsteps = 1 because the pico counter can't keep up with 256 during slew)
-
+		if err := r.motor.Microsteps(256); err != nil {
+			log.Printf("error setting microsteps: %s", err)
+		}
 		if err := r.motor.Move(trackingSpeed * r.direction); err != nil {
-			r.start = time.Now()
 			log.Printf("error tracking motor: %s", err)
 		}
+		r.start = time.Now()
 	default:
+		r.state = Idle
 		if err := r.motor.Move(0); err != nil {
 			log.Printf("error stopping motor: %s", err)
 		}
