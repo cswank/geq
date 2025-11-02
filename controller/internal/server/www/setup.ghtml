@@ -34,19 +34,23 @@
   <body>
     <div class="axes">
       <div>Right Ascension</div>
-      <div><button class="speed" type="text" onclick="move('ra', -1)">-</button></div>
+      <div><button class="speed" type="text" onclick="move('ra', -0.1)">-</button></div>
       <div><button class="speed" type="text" onclick="move('ra', 0)">stop</button></div>
-      <div><button class="speed" type="text" onclick="move('ra', 1)">+</button></div>
+      <div><button class="speed" type="text" onclick="move('ra', 0.1)">+</button></div>
       <div>Declination</div>
-      <div><button class="speed" type="text" onclick="move('dec', -1)">-</button></div>
+      <div><button class="speed" type="text" onclick="move('dec', -0.1)">-</button></div>
       <div><button class="speed" type="text" onclick="move('dec', 0)">stop</button></div>
-      <div><button class="speed" type="text" onclick="move('dec', 1)">+</button></div>
+      <div><button class="speed" type="text" onclick="move('dec', 0.1)">+</button></div>
     </div>
     <div class="coords">
       <div>Latitude</div>
-      <div><input type="text" id="latitude"/></div>
+      <div><input type="text" id="latitude" value="{{.Latitude}}"/></div>
       <div>Longitude</div>
-      <div><input type="text" id="longitude"/></div>
+      <div><input type="text" id="longitude" value="{{.Longitude}}"/></div>
+      {{if .SetTime}}
+      <div>Time</div>
+      <div><input type="datetime-local" id="datetime" value="{{.Time}}"></div>
+      {{end}}
     </div>
     <button onclick="coords()">Submit</button>
   </body>
@@ -56,11 +60,11 @@
        'dec': 0,
    };
 
-   function move(axis, speed) {
-       if (speed == 0) {
+   function move(axis, i) {
+       if (i == 0) {
            axes[axis] = 0;
        }  else {
-           axes[axis] += speed;
+           axes[axis] += i;
        }
 
        post(`/${axis}`, {hz: axes[axis]}, null);

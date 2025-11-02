@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -40,9 +41,11 @@ type (
 		Visible       bool    `json:"visible"`
 	}
 
-	position struct {
+	setup struct {
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
+		Time      string  `json:"time"`
+		SetTime   bool    `json:"-"`
 	}
 
 	movement struct {
@@ -135,7 +138,7 @@ func New(m *mount.Telescope) (*Server, error) {
 	srv.mux.HandleFunc("GET /objects/{id}", handle(srv.getObject))
 	srv.mux.HandleFunc("POST /objects/{id}", handle(srv.gotoObject))
 	srv.mux.HandleFunc("GET /setup", handle(srv.setup))
-	srv.mux.HandleFunc("POST /coordinates", handle(srv.coordinates))
+	srv.mux.HandleFunc("POST /coordinates", handle(srv.doSetup))
 	srv.mux.HandleFunc("POST /ra", handle(srv.move))
 	srv.mux.HandleFunc("POST /dec", handle(srv.move))
 
@@ -180,7 +183,36 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s Server) setup(w http.ResponseWriter, r *http.Request) error {
-	return s.set.ExecuteTemplate(w, "setup", nil)
+	ts := time.Now()
+	lat, lon := s.mount.GetCoordinates()
+	return s.set.ExecuteTemplate(w, "setup", setup{
+		SetTime:   ts.Year() < 2025, // no internet, need to manually set time
+		Time:      ts.Format("2006-01-02T04:05"),
+		Latitude:  lat,
+		Longitude: lon,
+	})
+}
+
+func (s *Server) doSetup(w http.ResponseWriter, r *http.Request) error {
+	var p setup
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		return err
+	}
+
+	s.mount.Coordinates(p.Latitude, p.Longitude)
+
+	if time.Now().Year() < 2025 {
+		ts, err := time.Parse("2006-01-02T04:05", p.Time)
+		if err != nil {
+			return err
+		}
+		//date -s '2014-12-25 12:34:56'
+		args := []string{"--set", ts.Format("2006-01-01 04:05:06")}
+		if err := exec.Command("date", args...).Run(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s Server) object(w http.ResponseWriter, r *http.Request) error {
@@ -224,16 +256,6 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return json.NewEncoder(w).Encode(obj)
-}
-
-func (s *Server) coordinates(w http.ResponseWriter, r *http.Request) error {
-	var p position
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		return err
-	}
-
-	s.mount.Coordinates(p.Latitude, p.Longitude)
-	return nil
 }
 
 func (s *Server) move(w http.ResponseWriter, r *http.Request) error {
