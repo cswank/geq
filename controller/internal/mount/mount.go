@@ -142,8 +142,8 @@ func (t *Telescope) Goto(ra, dec string) error {
 
 func (t *Telescope) HourAngle(ra string, ts time.Time) string {
 	lst := t.ra.localSiderealTime(ts)
-	hours, minutes, _ := hm(ra)
-	hours += minutes / 60
+	hours, minutes, seconds, _ := hms(ra)
+	hours += (minutes / 60) + (seconds / 3600)
 	ha := lst - hours
 	hah := math.Floor(ha)
 	ham := (ha - hah) * 60
@@ -151,7 +151,7 @@ func (t *Telescope) HourAngle(ra string, ts time.Time) string {
 	return fmt.Sprintf("%02d:%02d", int(hah), int(ham))
 }
 
-func (t Telescope) Visible(id int, ra, dec string, ts time.Time) bool {
+func (t Telescope) Visible(id string, ra, dec string, ts time.Time) bool {
 	ha, _ := t.ra.hourAngle(ra, ts)
 	deg, _ := t.dec.degrees(dec)
 	return t.circumpolar(deg) || t.aboveHorizon(ha, deg)

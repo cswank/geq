@@ -15,7 +15,7 @@
                  width: "100px",
                  formatter: (cell) => {
                      return gridjs.html(
-                         `<a href='/${cell}'>M${cell}</a>`
+                         `<a href='/${cell}'>${cell}</a>`
                      );
                  }
              },

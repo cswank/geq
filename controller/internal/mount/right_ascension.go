@@ -1,7 +1,6 @@
 package mount
 
 import (
-	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -75,9 +74,8 @@ func (r *RA) slew(ra string, t time.Time) (uint16, error) {
 
 func (r RA) hourAngle(ra string, t time.Time) (float64, error) {
 	lst := r.localSiderealTime(t)
-	fmt.Println(lst)
-	hours, minutes, err := hm(ra)
-	deg := (15 * hours) + (15 * (minutes / 60))
+	hours, minutes, seconds, err := hms(ra)
+	deg := (15 * hours) + (15 * (minutes / 60)) + (15 * (seconds / 3600))
 	return ((lst / 24) * 360) - deg, err
 }
 
@@ -151,15 +149,15 @@ func julianDate(datetime time.Time) float64 {
 	return float64(time)/86400000.0 + j1970
 }
 
-func hm(s string) (float64, float64, error) {
+func hms(s string) (float64, float64, float64, error) {
 	ss, err := splitCoord(s)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	f, err := parseFloats(ss[0], ss[1])
+	f, err := parseFloats(ss[0], ss[1], ss[2])
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
-	return f[0], f[1], nil
+	return f[0], f[1], f[2], nil
 }

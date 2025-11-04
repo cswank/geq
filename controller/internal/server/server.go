@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 )
 
 var (
-	//go:embed files/messier.db
+	//go:embed files/objects.db
 	dbf embed.FS
 
 	//go:embed www/*
@@ -28,17 +27,17 @@ var (
 
 type (
 	object struct {
-		ID            int     `json:"id"`
-		NGC           *int    `json:"ngc"`
-		MType         string  `json:"m_type"`
-		Constellation string  `json:"constellation"`
-		RA            string  `json:"ra"`
-		Decl          string  `json:"decl"`
-		Magnitude     float64 `json:"magnitude"`
-		Name          *string `json:"name"`
-		HA            float64 `json:"ha"`
-		HourAngle     string  `json:"hour_angle"`
-		Visible       bool    `json:"visible"`
+		ID            string   `json:"id"`
+		NGC           *int     `json:"ngc"`
+		MType         string   `json:"m_type"`
+		Constellation *string  `json:"constellation"`
+		RA            string   `json:"ra"`
+		Decl          string   `json:"decl"`
+		Magnitude     *float64 `json:"magnitude"`
+		Name          *string  `json:"name"`
+		HA            float64  `json:"ha"`
+		HourAngle     string   `json:"hour_angle"`
+		Visible       bool     `json:"visible"`
 	}
 
 	setup struct {
@@ -73,7 +72,7 @@ func (o object) MarshalJSON() ([]byte, error) {
 		n = *o.Name
 	}
 	return json.Marshal([]string{
-		strconv.Itoa(o.ID),
+		o.ID,
 		fmt.Sprintf("%t", o.Visible),
 		o.HourAngle,
 		n,
@@ -86,7 +85,7 @@ func New(m *mount.Telescope) (*Server, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", "file:files/messier.db?vfs="+fn)
+	db, err := sql.Open("sqlite", "file:files/objects.db?vfs="+fn)
 	if err != nil {
 		return nil, err
 	}
@@ -268,23 +267,20 @@ func (s *Server) move(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s Server) doGetObject(r *http.Request) (object, error) {
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		return object{}, err
-	}
+	id := r.PathValue("id")
 
 	var o object
-	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier WHERE m = ?"
-	return o, s.db.QueryRow(q, id).Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
+	q := `SELECT id, type, constelation, ra, dec, magnitude, name FROM objects WHERE id = ?`
+	return o, s.db.QueryRow(q, id).Scan(&o.ID, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
 }
 
 func (s Server) doGetObjects(r *http.Request) ([]object, error) {
 	ts := time.Now()
-	q := "SELECT m, ngc, mtype, constellation, ra, decl, magnitude, name FROM messier%s"
+	q := `SELECT id, type, constelation, ra, dec, magnitude, name FROM objects%s LIMIT 100`
 	var clause string
 	var args []any
 	if s := r.URL.Query().Get("search"); s != "" {
-		clause = " WHERE name LIKE ?"
+		clause = ` AND name LIKE ?`
 		args = append(args, fmt.Sprintf("%%%s%%", s))
 	}
 
@@ -298,7 +294,7 @@ func (s Server) doGetObjects(r *http.Request) ([]object, error) {
 	objs := []object{}
 	for rows.Next() {
 		var o object
-		if err := rows.Scan(&o.ID, &o.NGC, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
+		if err := rows.Scan(&o.ID, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
 			return nil, err
 		}
 

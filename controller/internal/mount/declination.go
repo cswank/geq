@@ -61,12 +61,12 @@ func (d *Declination) slew(dec string) (uint16, error) {
 }
 
 func (d *Declination) degrees(s string) (float64, error) {
-	degrees, minutes, err := hm(s)
+	degrees, minutes, seconds, err := hms(s)
 	if err != nil {
 		return 0, err
 	}
 
-	return degrees + (minutes / 60), nil
+	return degrees + (minutes / 60) + (seconds / 3600), nil
 }
 
 func (d *Declination) listen(evt gpiocdev.LineEvent) {
