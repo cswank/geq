@@ -61,31 +61,32 @@
          },
          server: {
              url: '/objects',
-             then: data => data.objects.map(obj => [
-                 obj.id,
-                 obj.visible.toString(),
-                 obj.hour_angle,
-                 obj.name
-             ]),
+             then: data => data.objects.map(obj => {
+                 var id = obj.id
+                 if (!obj.visible) {
+                     id = `${id}*`
+                 }
+
+                 return [
+                     gridjs.html(`<a href='/${obj.id}'>${id}</a>`),
+                     obj.type,
+                     obj.constellation,
+                     obj.name
+             ]}),
              total: data => data.total
          },
          columns: [
              {
                  name: "id",
                  width: "100px",
-                 formatter: (cell) => {
-                     return gridjs.html(
-                         `<a href='/${cell}'>${cell}</a>`
-                     );
-                 }
              },
              {
-                 name: "visible",
+                 name: "type",
                  width: "100px",
                  filter: true
              },
              {
-                 name: "hour angle",
+                 name: "constellation",
                  width: "100px",
              },
              {

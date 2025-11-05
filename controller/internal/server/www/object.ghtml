@@ -24,8 +24,8 @@
     <div class="container">
       <div>NGC</div>
       <div>{{.NGC}}</div>
-      <div>MType</div>
-      <div>{{.MType}}</div>
+      <div>Type</div>
+      <div>{{.Type}}</div>
       <div>Constellation</div>
       <div>{{.Constellation}}</div>
       <div>RA</div>
@@ -36,6 +36,8 @@
       <div>{{.Magnitude}}</div>
       <div>Hour Angle</div>
       <div>{{.HourAngle}}</div>
+      <div>Visible</div>
+      <div>{{.Visible}}</div>
     </div>
     <button onclick="goto()">Goto</button>
   </body>

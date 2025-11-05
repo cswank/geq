@@ -30,7 +30,7 @@ type (
 	object struct {
 		ID            string   `json:"id"`
 		NGC           *int     `json:"ngc"`
-		MType         string   `json:"m_type"`
+		Type          string   `json:"type"`
 		Constellation *string  `json:"constellation"`
 		RA            string   `json:"ra"`
 		Decl          string   `json:"decl"`
@@ -274,7 +274,13 @@ func (s Server) doGetObject(r *http.Request) (object, error) {
 
 	var o object
 	q := `SELECT id, type, constelation, ra, dec, magnitude, name FROM objects WHERE id = ?`
-	return o, s.db.QueryRow(q, id).Scan(&o.ID, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
+	if err := s.db.QueryRow(q, id).Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
+		return o, err
+	}
+
+	o.Visible = s.mount.Visible(o.ID, o.RA, o.Decl, time.Now())
+
+	return o, nil
 }
 
 func (s Server) doGetObjects(r *http.Request) (objs objects, err error) {
@@ -336,7 +342,7 @@ func (s Server) doGetObjects(r *http.Request) (objs objects, err error) {
 	for rows.Next() {
 		var o object
 		var m sql.NullString
-		if err := rows.Scan(&o.ID, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &m); err != nil {
+		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &m); err != nil {
 			return objs, err
 		}
 
