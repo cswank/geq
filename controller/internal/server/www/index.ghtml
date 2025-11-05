@@ -64,7 +64,10 @@
              then: data => data.objects.map(obj => {
                  var id = obj.id
                  if (!obj.visible) {
-                     id = `${id}*`
+                     id = `${id}*`;
+                 }
+                 if (obj.m) {
+                     id = `${id} (M${obj.m})`;
                  }
 
                  return [

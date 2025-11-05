@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cswank/geq/controller/internal/mount"
+	"github.com/parsyl/sqrl"
 	_ "modernc.org/sqlite"
 	"modernc.org/sqlite/vfs"
 )
@@ -24,11 +25,14 @@ var (
 
 	//go:embed www/*
 	static embed.FS
+
+	columns = []string{"id", "type", "constelation", "ra", "dec", "magnitude", "name", "m"}
 )
 
 type (
 	object struct {
 		ID            string   `json:"id"`
+		M             *int     `json:"m"`
 		NGC           *int     `json:"ngc"`
 		Type          string   `json:"type"`
 		Constellation *string  `json:"constellation"`
@@ -70,17 +74,7 @@ type (
 		obj   *template.Template
 		set   *template.Template
 	}
-
-	sqlClause string
 )
-
-func (s sqlClause) where() string {
-	if len(s) > 0 {
-		return "AND"
-	}
-
-	return "WHERE"
-}
 
 func New(m *mount.Telescope) (*Server, error) {
 	fn, f, err := vfs.New(dbf)
@@ -284,37 +278,40 @@ func (s Server) doGetObject(r *http.Request) (object, error) {
 }
 
 func (s Server) doGetObjects(r *http.Request) (objs objects, err error) {
-	var clause sqlClause
-
+	cte := sqrl.Select(columns...).
+		From("objects")
 	if r.URL.Query().Get("messier") == "true" {
-		clause += sqlClause(fmt.Sprintf(` %s m IS NOT NULL`, clause.where()))
+		cte.Where("m IS NOT NULL").
+			OrderBy("m")
 	}
 
 	if r.URL.Query().Get("named") == "true" {
-		clause += sqlClause(fmt.Sprintf(` %s name IS NOT NULL`, clause.where()))
+		cte.Where("name IS NOT NULL")
 	}
 
-	var args []any
 	if r.URL.Query().Get("visible") == "true" {
 		t := time.Now()
 		lst := s.mount.LocalSiderealTime(t)
 		lst = (lst / 24) * 360
-		clause += sqlClause(fmt.Sprintf(` %s ((dec_degrees > ?) OR (cos(? - ra_degrees) > (-1*tan(?)*tan(dec_degrees))))`, clause.where()))
 		lat, _ := s.mount.GetCoordinates()
-		args = append(args, s.mount.Rad(90-lat), s.mount.Rad(lst), s.mount.Rad(lat))
+		cte.Where("((dec_degrees > ?) OR (cos(? - ra_degrees) > (-1*tan(?)*tan(dec_degrees))))", s.mount.Rad(90-lat), s.mount.Rad(lst), s.mount.Rad(lat))
 	}
 
 	if s := r.URL.Query().Get("name"); s != "" {
-		clause += sqlClause(fmt.Sprintf(` %s name LIKE ?`, clause.where()))
-		args = append(args, fmt.Sprintf("%%%s%%", s))
+		cte.Where("name LIKE ?", fmt.Sprintf("%%%s%%", s))
 	}
 
-	if err := s.db.QueryRow(fmt.Sprintf("SELECT count(*) FROM objects%s", clause), args...).Scan(&objs.Total); err != nil {
+	q, args, _ := cte.ToSql()
+	count := fmt.Sprintf("WITH objs AS (%s) SELECT count(*) FROM objs", q)
+
+	if err := s.db.QueryRow(count, args...).Scan(&objs.Total); err != nil {
 		return objs, err
 	}
 
 	ts := time.Now()
-	q := `SELECT id, type, constelation, ra, dec, magnitude, name, m FROM objects%s`
+	sel := sqrl.Select(columns...).
+		From("objs").
+		Prefix(fmt.Sprintf("WITH objs AS (%s)", q), args...)
 
 	if s := r.URL.Query().Get("page"); s != "" {
 		pageSize := 20
@@ -330,32 +327,24 @@ func (s Server) doGetObjects(r *http.Request) (objs objects, err error) {
 		if err != nil {
 			return objs, err
 		}
-		clause += ` LIMIT ? OFFSET ?`
-		args = append(args, pageSize, i*pageSize)
+
+		sel.Limit(uint64(pageSize)).Offset(uint64(i * pageSize))
 	}
 
-	rows, err := s.db.Query(fmt.Sprintf(q, clause), args...)
+	q, args, _ = sel.ToSql()
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return objs, err
 	}
 
 	for rows.Next() {
 		var o object
-		var m sql.NullString
-		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &m); err != nil {
+		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &o.M); err != nil {
 			return objs, err
 		}
 
 		o.Visible = s.mount.Visible(o.ID, o.RA, o.Decl, ts)
 		o.HourAngle = s.mount.HourAngle(o.RA, ts)
-		if m.Valid {
-			var n string
-			if o.Name != nil {
-				n = *o.Name
-			}
-			n = fmt.Sprintf("M%s %s", m.String, n)
-			o.Name = &n
-		}
 		objs.Objects = append(objs.Objects, o)
 	}
 
