@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,11 @@ type (
 		Visible       bool     `json:"visible"`
 	}
 
+	objects struct {
+		Objects []object `json:"objects"`
+		Total   int      `json:"total"`
+	}
+
 	setup struct {
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
@@ -51,7 +57,7 @@ type (
 		Hz float64 `json:"hz"`
 	}
 
-	objects struct {
+	index struct {
 		Objects template.JS
 	}
 
@@ -64,19 +70,16 @@ type (
 		obj   *template.Template
 		set   *template.Template
 	}
+
+	sqlClause string
 )
 
-func (o object) MarshalJSON() ([]byte, error) {
-	var n string
-	if o.Name != nil {
-		n = *o.Name
+func (s sqlClause) where() string {
+	if len(s) > 0 {
+		return "AND"
 	}
-	return json.Marshal([]string{
-		o.ID,
-		fmt.Sprintf("%t", o.Visible),
-		o.HourAngle,
-		n,
-	})
+
+	return "WHERE"
 }
 
 func New(m *mount.Telescope) (*Server, error) {
@@ -178,7 +181,7 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return s.idx.ExecuteTemplate(w, "index", objects{Objects: template.JS(j)})
+	return s.idx.ExecuteTemplate(w, "index", index{Objects: template.JS(j)})
 }
 
 func (s Server) setup(w http.ResponseWriter, r *http.Request) error {
@@ -274,35 +277,80 @@ func (s Server) doGetObject(r *http.Request) (object, error) {
 	return o, s.db.QueryRow(q, id).Scan(&o.ID, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name)
 }
 
-func (s Server) doGetObjects(r *http.Request) ([]object, error) {
-	ts := time.Now()
-	q := `SELECT id, type, constelation, ra, dec, magnitude, name FROM objects%s LIMIT 100`
-	var clause string
+func (s Server) doGetObjects(r *http.Request) (objs objects, err error) {
+	var clause sqlClause
+
+	if r.URL.Query().Get("messier") == "true" {
+		clause += sqlClause(fmt.Sprintf(` %s m IS NOT NULL`, clause.where()))
+	}
+
+	if r.URL.Query().Get("named") == "true" {
+		clause += sqlClause(fmt.Sprintf(` %s name IS NOT NULL`, clause.where()))
+	}
+
 	var args []any
-	if s := r.URL.Query().Get("search"); s != "" {
-		clause = ` AND name LIKE ?`
+	if r.URL.Query().Get("visible") == "true" {
+		t := time.Now()
+		lst := s.mount.LocalSiderealTime(t)
+		lst = (lst / 24) * 360
+		clause += sqlClause(fmt.Sprintf(` %s ((dec_degrees > ?) OR (cos(? - ra_degrees) > (-1*tan(?)*tan(dec_degrees))))`, clause.where()))
+		lat, _ := s.mount.GetCoordinates()
+		args = append(args, s.mount.Rad(90-lat), s.mount.Rad(lst), s.mount.Rad(lat))
+	}
+
+	if s := r.URL.Query().Get("name"); s != "" {
+		clause += sqlClause(fmt.Sprintf(` %s name LIKE ?`, clause.where()))
 		args = append(args, fmt.Sprintf("%%%s%%", s))
+	}
+
+	if err := s.db.QueryRow(fmt.Sprintf("SELECT count(*) FROM objects%s", clause), args...).Scan(&objs.Total); err != nil {
+		return objs, err
+	}
+
+	ts := time.Now()
+	q := `SELECT id, type, constelation, ra, dec, magnitude, name, m FROM objects%s`
+
+	if s := r.URL.Query().Get("page"); s != "" {
+		pageSize := 20
+		if s := r.URL.Query().Get("pagesize"); s != "" {
+			i, err := strconv.Atoi(s)
+			if err != nil {
+				return objs, err
+			}
+			pageSize = i
+		}
+
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			return objs, err
+		}
+		clause += ` LIMIT ? OFFSET ?`
+		args = append(args, pageSize, i*pageSize)
 	}
 
 	rows, err := s.db.Query(fmt.Sprintf(q, clause), args...)
 	if err != nil {
-		return nil, err
+		return objs, err
 	}
 
-	vis := r.URL.Query().Get("visible") == "true"
-
-	objs := []object{}
 	for rows.Next() {
 		var o object
-		if err := rows.Scan(&o.ID, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
-			return nil, err
+		var m sql.NullString
+		if err := rows.Scan(&o.ID, &o.MType, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &m); err != nil {
+			return objs, err
 		}
 
 		o.Visible = s.mount.Visible(o.ID, o.RA, o.Decl, ts)
 		o.HourAngle = s.mount.HourAngle(o.RA, ts)
-		if !vis || o.Visible {
-			objs = append(objs, o)
+		if m.Valid {
+			var n string
+			if o.Name != nil {
+				n = *o.Name
+			}
+			n = fmt.Sprintf("M%s %s", m.String, n)
+			o.Name = &n
 		}
+		objs.Objects = append(objs.Objects, o)
 	}
 
 	return objs, nil

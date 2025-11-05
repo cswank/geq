@@ -157,6 +157,22 @@ func (t Telescope) Visible(id string, ra, dec string, ts time.Time) bool {
 	return t.circumpolar(deg) || t.aboveHorizon(ha, deg)
 }
 
+func (t Telescope) LocalSiderealTime(ts time.Time) float64 {
+	return t.ra.localSiderealTime(ts)
+}
+
+func (t Telescope) Rad(deg float64) float64 {
+	return rad(deg)
+}
+
+func (t Telescope) aboveHorizon(ha, dec float64) bool {
+	return math.Cos(rad(ha)) > -1*math.Tan(rad(t.latitude))*math.Tan(rad(dec))
+}
+
+func (t Telescope) circumpolar(dec float64) bool {
+	return dec > 90-t.latitude
+}
+
 // count sends the ra and decl steps to mcu that actually does the counting
 func (t *Telescope) count(ra, dec uint16) error {
 	msg := message{
@@ -181,14 +197,6 @@ func (t Telescope) Close() {
 	t.port.Close()
 	t.ra.line.Close()
 	t.dec.line.Close()
-}
-
-func (t Telescope) aboveHorizon(ha, dec float64) bool {
-	return math.Cos(rad(ha)) > -1*math.Tan(rad(t.latitude))*math.Tan(rad(dec))
-}
-
-func (t Telescope) circumpolar(dec float64) bool {
-	return dec > 90-t.latitude
 }
 
 func parseFloats(in ...string) ([]float64, error) {
