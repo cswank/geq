@@ -1,6 +1,7 @@
 package mount
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -41,7 +42,7 @@ func (r *RA) slew(ra string, t time.Time) (uint16, error) {
 
 	ha, err := r.hourAngle(ra, t)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("unable to calculate hour angle from %s: %s", ra, err)
 	}
 
 	deg := ha - currentHA

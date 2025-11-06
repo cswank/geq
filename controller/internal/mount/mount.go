@@ -74,7 +74,6 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Telescope, error)
 		if err := decMotor.Setup(tmc2209.SpreadCycle()...); err != nil {
 			log.Fatal(err)
 		}
-
 	}
 
 	var lock sync.Mutex
@@ -82,8 +81,8 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Telescope, error)
 	t := Telescope{
 		port:     port,
 		latitude: lat,
-		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ra: "02:31.8116667", longitude: lon},
-		dec:      Declination{dec: "89:15.85", lock: &lock, motor: decMotor},
+		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ra: "02:31:48.7", longitude: lon},
+		dec:      Declination{dec: "89:15:51", lock: &lock, motor: decMotor},
 	}
 
 	if device != "" {
@@ -215,7 +214,7 @@ func parseFloats(in ...string) ([]float64, error) {
 func splitCoord(s string) ([]string, error) {
 	s = strings.TrimSpace(s)
 	matches := strings.Split(s, ":")
-	if len(matches) < 2 {
+	if len(matches) < 3 {
 		return nil, fmt.Errorf("Cannot parse 'HDM' string: %s", s)
 	}
 
