@@ -100,7 +100,7 @@ func New(m *mount.Telescope) (*Server, error) {
 	srv.mux.HandleFunc("GET /objects/{id}", handle(srv.getObject))
 	srv.mux.HandleFunc("POST /objects/{id}", handle(srv.gotoObject))
 	srv.mux.HandleFunc("GET /setup", handle(srv.setup))
-	srv.mux.HandleFunc("POST /coordinates", handle(srv.doSetup))
+	srv.mux.HandleFunc("POST /setup", handle(srv.doSetup))
 	srv.mux.HandleFunc("POST /ra", handle(srv.move))
 	srv.mux.HandleFunc("POST /dec", handle(srv.move))
 
@@ -168,7 +168,7 @@ func (s *Server) doSetup(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s Server) object(w http.ResponseWriter, r *http.Request) error {
-	o, err := s.doGetObject(r)
+	o, err := repo.GetObject(r.PathValue("id"))
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (s Server) getObjects(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
-	obj, err := s.doGetObject(r)
+	obj, err := repo.GetObject(r.PathValue("id"))
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
-	obj, err := s.doGetObject(r)
+	obj, err := repo.GetObject(r.PathValue("id"))
 	if err != nil {
 		return err
 	}
@@ -217,10 +217,6 @@ func (s *Server) move(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return s.mount.Move(strings.ReplaceAll(r.URL.Path, "/", ""), m.Hz)
-}
-
-func (s Server) doGetObject(r *http.Request) (repo.Object, error) {
-	return repo.GetObject(r.PathValue("id"))
 }
 
 func (s Server) doGetObjects(r *http.Request) (objs repo.Objects, err error) {

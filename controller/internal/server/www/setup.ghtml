@@ -55,6 +55,17 @@
     <button onclick="coords()">Submit</button>
   </body>
   <script>
+   const setTime = {{.SetTime}};
+
+   document.addEventListener('DOMContentLoaded', () => {
+       if (setTime) {
+           const now = new Date();
+           now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+           const dt = document.getElementById('datetime');
+           dt.value = now.toISOString().slice(0, 16);
+       }
+   });
+
    var axes = {
        'ra': 0,
        'dec': 0,
@@ -74,7 +85,13 @@
        const lat = document.getElementById('latitude');
        const lon = document.getElementById('longitude');
        const data = {latitude: parseFloat(lat.value), longitude: parseFloat(lon.value)};
-       post('/coordinates', data, '/');
+
+       if (setTime) {
+           const time = document.getElementById('longitude');
+           data.time = time.value;
+       }
+
+       post('/setup', data, '/');
    }
 
    function post(url, data, loc) {

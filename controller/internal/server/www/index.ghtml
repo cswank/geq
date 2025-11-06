@@ -14,6 +14,12 @@
     <div id="wrapper"></div>
     <script src="/static/grid.umd.js"></script>
     <script>
+     document.addEventListener('DOMContentLoaded', () => {
+         document.getElementById("messier").checked = false;
+         document.getElementById("named").checked = false;
+         document.getElementById("visible").checked = false;
+     });
+
      var filters = [];
      function filter() {
          filters = [];
