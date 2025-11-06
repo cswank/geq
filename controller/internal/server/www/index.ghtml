@@ -15,29 +15,38 @@
     <script src="/static/grid.umd.js"></script>
     <script>
      document.addEventListener('DOMContentLoaded', () => {
-         document.getElementById("messier").checked = false;
-         document.getElementById("named").checked = false;
-         document.getElementById("visible").checked = false;
+         const urlParams = new URLSearchParams(window.location.search);
+         document.getElementById("messier").checked = urlParams.get('messier') == "true";
+         document.getElementById("named").checked = urlParams.get('named') == "true";
+         document.getElementById("visible").checked = urlParams.get('visible') == "true";
      });
 
-     var filters = [];
      function filter() {
-         filters = [];
          const m = document.getElementById("messier");
-         if (m.checked) {
-             filters.push("messier");
-         }
          const n = document.getElementById("named");
-         if (n.checked) {
-             filters.push("named");
-         }
-
          const v = document.getElementById("visible");
-         if (v.checked) {
-             filters.push("visible");
-         }
+         addQuery('messier', m.checked.toString());
+         addQuery('visible', v.checked.toString());
+         addQuery('named', n.checked.toString());
 
          grid.forceRender();
+     }
+
+     function filters() {
+         const m = document.getElementById("messier");
+         const n = document.getElementById("named");
+         const v = document.getElementById("visible");
+         return {
+             'messier': m.checked.toString(),
+             'visible': v.checked.toString(),
+             'named': n.checked.toString()
+         }
+     }
+
+     function addQuery(key, value) {
+         const url = new URL(window.location.href);
+         url.searchParams.set(key, value);
+         window.history.replaceState({}, '', url);
      }
 
      const grid = new gridjs.Grid({
@@ -49,9 +58,10 @@
                      const url = new URL(prev, document.location);
                      url.searchParams.append('page', page);
                      url.searchParams.append('pagesize', limit);
-                     filters.forEach((value, index) => {
-                         url.searchParams.append(value, "true");
+                     Object.entries(filters()).forEach(([key, value]) => {
+                         url.searchParams.append(key, value);
                      });
+                     console.log(url.href);
                      return url.href;
                  }
              }
@@ -87,7 +97,7 @@
          columns: [
              {
                  name: "id",
-                 width: "100px",
+                 width: "100px"
              },
              {
                  name: "type",
@@ -96,7 +106,7 @@
              },
              {
                  name: "constellation",
-                 width: "100px",
+                 width: "100px"
              },
              {
                  name: "name"
