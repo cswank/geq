@@ -2,6 +2,13 @@
 <html lang="en">
   <head>
     <link href="/static/mermaid.min.css" rel="stylesheet"/>
+    <style>
+     a.notvisible:link, a.notvisible:visited {
+         color: gray;
+         background-color: transparent;
+         text-decoration: none;
+     }
+    </style>
   </head>
   <body>
     <input type="checkbox" id="visible" onclick="filter()"/>
@@ -14,17 +21,18 @@
     <div id="wrapper"></div>
     <script src="/static/grid.umd.js"></script>
     <script>
+     const m = document.getElementById("messier");
+     const n = document.getElementById("named");
+     const v = document.getElementById("visible");
+
      document.addEventListener('DOMContentLoaded', () => {
          const urlParams = new URLSearchParams(window.location.search);
-         document.getElementById("messier").checked = urlParams.get('messier') == "true";
-         document.getElementById("named").checked = urlParams.get('named') == "true";
-         document.getElementById("visible").checked = urlParams.get('visible') == "true";
+         m.checked = urlParams.get('messier') == "true";
+         n.checked = urlParams.get('named') == "true";
+         v.checked = urlParams.get('visible') == "true";
      });
 
      function filter() {
-         const m = document.getElementById("messier");
-         const n = document.getElementById("named");
-         const v = document.getElementById("visible");
          addQuery('messier', m.checked.toString());
          addQuery('visible', v.checked.toString());
          addQuery('named', n.checked.toString());
@@ -33,9 +41,6 @@
      }
 
      function filters() {
-         const m = document.getElementById("messier");
-         const n = document.getElementById("named");
-         const v = document.getElementById("visible");
          return {
              'messier': m.checked.toString(),
              'visible': v.checked.toString(),
@@ -78,16 +83,18 @@
          server: {
              url: '/objects',
              then: data => data.objects.map(obj => {
-                 var id = obj.id
+                 var style = 'visible';
+                 var id = obj.id;
+
                  if (!obj.visible) {
-                     id = `${id}*`;
+                     style = 'notvisible';
                  }
                  if (obj.m) {
                      id = `${id} (M${obj.m})`;
                  }
 
                  return [
-                     gridjs.html(`<a href='/${obj.id}'>${id}</a>`),
+                     gridjs.html(`<a class='${style}' href='/${obj.id}'>${id}</a>`),
                      obj.type,
                      obj.constellation,
                      obj.name
@@ -97,7 +104,7 @@
          columns: [
              {
                  name: "id",
-                 width: "100px"
+                 width: "180px"
              },
              {
                  name: "type",
@@ -105,7 +112,7 @@
                  filter: true
              },
              {
-                 name: "constellation",
+                 name: "const.",
                  width: "100px"
              },
              {

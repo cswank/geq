@@ -22,8 +22,6 @@
     <h2>M{{.ID}}</h2>
     <h3>{{.Name}}</h3>
     <div class="container">
-      <div>NGC</div>
-      <div>{{.NGC}}</div>
       <div>Type</div>
       <div>{{.Type}}</div>
       <div>Constellation</div>
