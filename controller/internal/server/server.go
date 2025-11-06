@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -14,42 +13,17 @@ import (
 	"time"
 
 	"github.com/cswank/geq/controller/internal/mount"
-	"github.com/parsyl/sqrl"
+	"github.com/cswank/geq/controller/internal/repo"
 	_ "modernc.org/sqlite"
 	"modernc.org/sqlite/vfs"
 )
 
 var (
-	//go:embed files/objects.db
-	dbf embed.FS
-
 	//go:embed www/*
 	static embed.FS
-
-	columns = []string{"id", "type", "constelation", "ra", "dec", "magnitude", "name", "m"}
 )
 
 type (
-	object struct {
-		ID            string   `json:"id"`
-		M             *int     `json:"m"`
-		NGC           *int     `json:"ngc"`
-		Type          string   `json:"type"`
-		Constellation *string  `json:"constellation"`
-		RA            string   `json:"ra"`
-		Decl          string   `json:"decl"`
-		Magnitude     *float64 `json:"magnitude"`
-		Name          *string  `json:"name"`
-		HA            float64  `json:"ha"`
-		HourAngle     string   `json:"hour_angle"`
-		Visible       bool     `json:"visible"`
-	}
-
-	objects struct {
-		Objects []object `json:"objects"`
-		Total   int      `json:"total"`
-	}
-
 	setup struct {
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
@@ -77,13 +51,7 @@ type (
 )
 
 func New(m *mount.Telescope) (*Server, error) {
-	fn, f, err := vfs.New(dbf)
-	if err != nil {
-		return nil, err
-	}
-
-	db, err := sql.Open("sqlite", "file:files/objects.db?vfs="+fn)
-	if err != nil {
+	if err := repo.Init(m); err != nil {
 		return nil, err
 	}
 
@@ -121,8 +89,6 @@ func New(m *mount.Telescope) (*Server, error) {
 		idx:   idx,
 		obj:   obj,
 		set:   pos,
-		f:     f,
-		db:    db,
 		mount: m,
 		mux:   http.NewServeMux(),
 	}
@@ -165,17 +131,7 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 		return s.setup(w, r)
 	}
 
-	objs, err := s.doGetObjects(r)
-	if err != nil {
-		return err
-	}
-
-	j, err := json.Marshal(objs)
-	if err != nil {
-		return err
-	}
-
-	return s.idx.ExecuteTemplate(w, "index", index{Objects: template.JS(j)})
+	return s.idx.ExecuteTemplate(w, "index", nil)
 }
 
 func (s Server) setup(w http.ResponseWriter, r *http.Request) error {
@@ -263,56 +219,29 @@ func (s *Server) move(w http.ResponseWriter, r *http.Request) error {
 	return s.mount.Move(strings.ReplaceAll(r.URL.Path, "/", ""), m.Hz)
 }
 
-func (s Server) doGetObject(r *http.Request) (object, error) {
-	id := r.PathValue("id")
-
-	var o object
-	q := `SELECT id, type, constelation, ra, dec, magnitude, name FROM objects WHERE id = ?`
-	if err := s.db.QueryRow(q, id).Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name); err != nil {
-		return o, err
-	}
-
-	o.Visible = s.mount.Visible(o.ID, o.RA, o.Decl, time.Now())
-
-	return o, nil
+func (s Server) doGetObject(r *http.Request) (repo.Object, error) {
+	return repo.GetObject(r.PathValue("id"))
 }
 
-func (s Server) doGetObjects(r *http.Request) (objs objects, err error) {
-	cte := sqrl.Select(columns...).
-		From("objects")
+func (s Server) doGetObjects(r *http.Request) (objs repo.Objects, err error) {
+	var opts []repo.QueryOption
 	if r.URL.Query().Get("messier") == "true" {
-		cte.Where("m IS NOT NULL").
-			OrderBy("m")
+		opts = append(opts, repo.Messier)
 	}
 
 	if r.URL.Query().Get("named") == "true" {
-		cte.Where("name IS NOT NULL")
+		opts = append(opts, repo.Named)
 	}
 
 	if r.URL.Query().Get("visible") == "true" {
-		t := time.Now()
-		lst := s.mount.LocalSiderealTime(t)
-		lst = (lst / 24) * 360
-		lat, _ := s.mount.GetCoordinates()
-		cte.Where("((dec_degrees > ?) OR (cos(? - ra_degrees) > (-1*tan(?)*tan(dec_degrees))))", s.mount.Rad(90-lat), s.mount.Rad(lst), s.mount.Rad(lat))
+		opts = append(opts, repo.Visible)
 	}
 
 	if s := r.URL.Query().Get("name"); s != "" {
-		cte.Where("name LIKE ?", fmt.Sprintf("%%%s%%", s))
+		opts = append(opts, repo.Name(s))
 	}
 
-	q, args, _ := cte.ToSql()
-	count := fmt.Sprintf("WITH objs AS (%s) SELECT count(*) FROM objs", q)
-
-	if err := s.db.QueryRow(count, args...).Scan(&objs.Total); err != nil {
-		return objs, err
-	}
-
-	ts := time.Now()
-	sel := sqrl.Select(columns...).
-		From("objs").
-		Prefix(fmt.Sprintf("WITH objs AS (%s)", q), args...)
-
+	var pg repo.QueryOption
 	if s := r.URL.Query().Get("page"); s != "" {
 		pageSize := 20
 		if s := r.URL.Query().Get("pagesize"); s != "" {
@@ -328,27 +257,10 @@ func (s Server) doGetObjects(r *http.Request) (objs objects, err error) {
 			return objs, err
 		}
 
-		sel.Limit(uint64(pageSize)).Offset(uint64(i * pageSize))
+		pg = repo.Page(i, pageSize)
 	}
 
-	q, args, _ = sel.ToSql()
-	rows, err := s.db.Query(q, args...)
-	if err != nil {
-		return objs, err
-	}
-
-	for rows.Next() {
-		var o object
-		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &o.M); err != nil {
-			return objs, err
-		}
-
-		o.Visible = s.mount.Visible(o.ID, o.RA, o.Decl, ts)
-		o.HourAngle = s.mount.HourAngle(o.RA, ts)
-		objs.Objects = append(objs.Objects, o)
-	}
-
-	return objs, nil
+	return repo.GetObjects(pg, opts...)
 }
 
 func serveStatic(w http.ResponseWriter, req *http.Request) error {

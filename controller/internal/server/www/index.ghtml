@@ -96,8 +96,7 @@
                  name: "name"
              },
          ],
-         sort: true,
-         data: {{.Objects}}
+         sort: true
      }).render(document.getElementById("wrapper"));
     </script>
   </body>
