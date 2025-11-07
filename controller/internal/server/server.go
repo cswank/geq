@@ -43,14 +43,14 @@ type (
 		db    *sql.DB
 		f     *vfs.FS
 		mux   *http.ServeMux
-		mount *mount.Telescope
+		mount *mount.Mount
 		idx   *template.Template
 		obj   *template.Template
 		set   *template.Template
 	}
 )
 
-func New(m *mount.Telescope) (*Server, error) {
+func New(m *mount.Mount) (*Server, error) {
 	if err := repo.Init(m); err != nil {
 		return nil, err
 	}

@@ -32,7 +32,7 @@ var (
 	fs *vfs.FS
 	db *sql.DB
 
-	mnt *mount.Telescope
+	mnt *mount.Mount
 )
 
 type (
@@ -61,7 +61,7 @@ type (
 	QueryOption func(*sqrl.SelectBuilder)
 )
 
-func Init(m *mount.Telescope) (err error) {
+func Init(m *mount.Mount) (err error) {
 	mnt = m
 
 	var fn string
