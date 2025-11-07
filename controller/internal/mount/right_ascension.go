@@ -138,16 +138,3 @@ func julianDate(datetime time.Time) float64 {
 	var time int64 = datetime.UTC().UnixNano() / 1e6
 	return float64(time)/86400000.0 + j1970
 }
-
-func hms(s string) (float64, float64, float64, error) {
-	ss, err := splitCoord(s)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	f, err := parseFloats(ss[0], ss[1], ss[2])
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	return f[0], f[1], f[2], nil
-}

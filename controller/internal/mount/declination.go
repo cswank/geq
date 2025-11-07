@@ -48,15 +48,6 @@ func (d *Declination) slew(dec float64) (uint16, error) {
 	return steps, nil
 }
 
-func (d *Declination) degrees(s string) (float64, error) {
-	degrees, minutes, seconds, err := hms(s)
-	if err != nil {
-		return 0, err
-	}
-
-	return degrees + (minutes / 60) + (seconds / 3600), nil
-}
-
 func (d *Declination) listen(evt gpiocdev.LineEvent) {
 	d.lock.Lock()
 
