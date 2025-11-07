@@ -55,32 +55,7 @@ func New(m *mount.Telescope) (*Server, error) {
 		return nil, err
 	}
 
-	s, err := static.ReadFile("www/index.ghtml")
-	if err != nil {
-		return nil, err
-	}
-
-	idx, err := template.New("index").Parse(string(s))
-	if err != nil {
-		return nil, err
-	}
-
-	s, err = static.ReadFile("www/object.ghtml")
-	if err != nil {
-		return nil, err
-	}
-
-	obj, err := template.New("object").Parse(string(s))
-	if err != nil {
-		return nil, err
-	}
-
-	s, err = static.ReadFile("www/setup.ghtml")
-	if err != nil {
-		return nil, err
-	}
-
-	pos, err := template.New("setup").Parse(string(s))
+	idx, obj, pos, err := templates()
 	if err != nil {
 		return nil, err
 	}
@@ -273,4 +248,38 @@ func serveStatic(w http.ResponseWriter, req *http.Request) error {
 	}
 	_, err = w.Write(p)
 	return err
+}
+
+func templates() (*template.Template, *template.Template, *template.Template, error) {
+	s, err := static.ReadFile("www/index.ghtml")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	idx, err := template.New("index").Parse(string(s))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	s, err = static.ReadFile("www/object.ghtml")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	obj, err := template.New("object").Parse(string(s))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	s, err = static.ReadFile("www/setup.ghtml")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	pos, err := template.New("setup").Parse(string(s))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return idx, obj, pos, nil
 }

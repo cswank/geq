@@ -37,14 +37,14 @@ func (r *RA) slew(ra float64, t time.Time) (uint16, error) {
 	currentHA := r.hourAngle(r.ra, t)
 	ha := r.hourAngle(ra, t)
 
-	deg := ha - currentHA
+	rads := ha - currentHA
 	if r.state == Tracking {
-		deg += rad(15 * time.Since(r.start).Minutes() / 60)
+		rads += rad(15 * time.Since(r.start).Minutes() / 60)
 	}
 
-	if deg < 0 {
+	if rads < 0 {
 		r.direction = -1
-		deg *= -1
+		rads *= -1
 	} else {
 		r.direction = 1
 	}
@@ -52,8 +52,8 @@ func (r *RA) slew(ra float64, t time.Time) (uint16, error) {
 	r.ra = ra
 	r.start = t
 
-	steps := radsToSteps(deg)
-	log.Printf("ra: current ha: %f, ha: %f, degrees: %f, steps: %d, diration: %f\n", currentHA, ha, deg, steps, r.direction)
+	steps := radsToSteps(rads)
+	log.Printf("ra: current ha: %f, ha: %f, radians: %f, steps: %d, diration: %f\n", currentHA, ha, rads, steps, r.direction)
 
 	if steps < 100 {
 		r.state = Slew
@@ -66,8 +66,7 @@ func (r *RA) slew(ra float64, t time.Time) (uint16, error) {
 }
 
 func (r RA) hourAngle(ra float64, t time.Time) float64 {
-	lst := r.localSiderealTime(t)
-	return rad((lst/24)*360) - ra
+	return ((r.localSiderealTime(t) / 24) * 2 * math.Pi) - ra
 }
 
 func (r RA) localSiderealTime(datetime time.Time) float64 {
