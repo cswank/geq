@@ -22,10 +22,13 @@ type (
 		line       *gpiocdev.Line
 		longitude  float64
 		state      state
-		start      time.Time
-		ra         float64
 		direction  float64
 		microsteps int
+
+		// start is the time at which tracking began
+		start time.Time
+		// ha is the hour angle of the object being tracked
+		ha float64
 	}
 )
 
@@ -34,10 +37,9 @@ func (r *RA) slewing() bool {
 }
 
 func (r *RA) slew(ra float64, t time.Time) (uint16, error) {
-	currentHA := r.hourAngle(r.ra, t)
 	ha := r.hourAngle(ra, t)
 
-	rads := ha - currentHA
+	rads := ha - r.ha
 	if r.state == Tracking {
 		rads += rad(15 * time.Since(r.start).Minutes() / 60)
 	}
@@ -49,11 +51,11 @@ func (r *RA) slew(ra float64, t time.Time) (uint16, error) {
 		r.direction = 1
 	}
 
-	r.ra = ra
-	r.start = t
-
 	steps := radsToSteps(rads)
-	log.Printf("ra: current ha: %f, ha: %f, radians: %f, steps: %d, diration: %f\n", currentHA, ha, rads, steps, r.direction)
+	log.Printf("ra: current ha: %f, ha: %f, radians: %f, steps: %d, diration: %f\n", r.ha, ha, rads, steps, r.direction)
+
+	r.ha = ha
+	r.start = t
 
 	if steps < 100 {
 		r.state = Slew

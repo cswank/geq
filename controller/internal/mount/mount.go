@@ -81,8 +81,8 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Mount, error) {
 	t := Mount{
 		port:     port,
 		latitude: lat,
-		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ra: 0.424, longitude: lon}, //polaris's ra in radians
-		dec:      Declination{dec: math.Pi / 4, lock: &lock, motor: decMotor},             //polaris's dec in radians
+		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ha: 0, longitude: lon},
+		dec:      Declination{dec: math.Pi / 4, lock: &lock, motor: decMotor},
 	}
 
 	if device != "" {
