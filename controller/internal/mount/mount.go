@@ -81,8 +81,8 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Telescope, error)
 	t := Telescope{
 		port:     port,
 		latitude: lat,
-		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ra: "02:31:48.7", longitude: lon},
-		dec:      Declination{dec: "89:15:51", lock: &lock, motor: decMotor},
+		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ra: 0.424, longitude: lon},
+		dec:      Declination{dec: math.Pi / 4, lock: &lock, motor: decMotor},
 	}
 
 	if device != "" {
@@ -120,7 +120,7 @@ func (t *Telescope) Move(axis string, hz float64) error {
 	return nil
 }
 
-func (t *Telescope) Goto(ra, dec string) error {
+func (t *Telescope) Goto(ra, dec float64) error {
 	if t.ra.slewing() || t.dec.slewing() {
 		return fmt.Errorf("refusing to goto object while the mount is slewing")
 	}
@@ -139,21 +139,14 @@ func (t *Telescope) Goto(ra, dec string) error {
 	return t.count(rSteps, dSteps)
 }
 
-func (t *Telescope) HourAngle(ra string, ts time.Time) string {
+func (t *Telescope) HourAngle(ra float64, ts time.Time) string {
 	lst := t.ra.localSiderealTime(ts)
-	hours, minutes, seconds, _ := hms(ra)
-	hours += (minutes / 60) + (seconds / 3600)
-	ha := lst - hours
+
+	ha := lst - ((ra / (2 * math.Pi)) / 24)
 	hah := math.Floor(ha)
 	ham := (ha - hah) * 60
 
 	return fmt.Sprintf("%02d:%02d", int(hah), int(ham))
-}
-
-func (t Telescope) Visible(id string, ra, dec string, ts time.Time) bool {
-	ha, _ := t.ra.hourAngle(ra, ts)
-	deg, _ := t.dec.degrees(dec)
-	return t.circumpolar(deg) || t.aboveHorizon(ha, deg)
 }
 
 func (t Telescope) LocalSiderealTime(ts time.Time) float64 {
@@ -162,14 +155,6 @@ func (t Telescope) LocalSiderealTime(ts time.Time) float64 {
 
 func (t Telescope) Rad(deg float64) float64 {
 	return rad(deg)
-}
-
-func (t Telescope) aboveHorizon(ha, dec float64) bool {
-	return math.Cos(rad(ha)) > -1*math.Tan(rad(t.latitude))*math.Tan(rad(dec))
-}
-
-func (t Telescope) circumpolar(dec float64) bool {
-	return dec > 90-t.latitude
 }
 
 // count sends the ra and decl steps to mcu that actually does the counting
@@ -225,8 +210,9 @@ func splitCoord(s string) ([]string, error) {
 	return matches, nil
 }
 
-func degreesToSteps(deg float64) uint16 {
-	return uint16(((deg / 360) * 100 * 200) / 2)
+// TODO: handle dec gear ratio
+func radsToSteps(r float64) uint16 {
+	return uint16((r / (2 * math.Pi)) * 100 * 200)
 }
 
 func rad(d float64) float64 {

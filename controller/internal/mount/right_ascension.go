@@ -1,7 +1,6 @@
 package mount
 
 import (
-	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -24,7 +23,7 @@ type (
 		longitude  float64
 		state      state
 		start      time.Time
-		ra         string
+		ra         float64
 		direction  float64
 		microsteps int
 	}
@@ -34,20 +33,13 @@ func (r *RA) slewing() bool {
 	return r.state == Slew || r.state == SlowSlew
 }
 
-func (r *RA) slew(ra string, t time.Time) (uint16, error) {
-	currentHA, err := r.hourAngle(r.ra, t)
-	if err != nil {
-		return 0, err
-	}
-
-	ha, err := r.hourAngle(ra, t)
-	if err != nil {
-		return 0, fmt.Errorf("unable to calculate hour angle from %s: %s", ra, err)
-	}
+func (r *RA) slew(ra float64, t time.Time) (uint16, error) {
+	currentHA := r.hourAngle(r.ra, t)
+	ha := r.hourAngle(ra, t)
 
 	deg := ha - currentHA
 	if r.state == Tracking {
-		deg += 15 * time.Since(r.start).Minutes() / 60
+		deg += rad(15 * time.Since(r.start).Minutes() / 60)
 	}
 
 	if deg < 0 {
@@ -60,7 +52,7 @@ func (r *RA) slew(ra string, t time.Time) (uint16, error) {
 	r.ra = ra
 	r.start = t
 
-	steps := degreesToSteps(deg)
+	steps := radsToSteps(deg)
 	log.Printf("ra: current ha: %f, ha: %f, degrees: %f, steps: %d, diration: %f\n", currentHA, ha, deg, steps, r.direction)
 
 	if steps < 100 {
@@ -73,11 +65,9 @@ func (r *RA) slew(ra string, t time.Time) (uint16, error) {
 	return steps, nil
 }
 
-func (r RA) hourAngle(ra string, t time.Time) (float64, error) {
+func (r RA) hourAngle(ra float64, t time.Time) float64 {
 	lst := r.localSiderealTime(t)
-	hours, minutes, seconds, err := hms(ra)
-	deg := (15 * hours) + (15 * (minutes / 60)) + (15 * (seconds / 3600))
-	return ((lst / 24) * 360) - deg, err
+	return rad((lst/24)*360) - ra
 }
 
 func (r RA) localSiderealTime(datetime time.Time) float64 {

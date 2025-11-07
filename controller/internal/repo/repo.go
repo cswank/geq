@@ -22,6 +22,8 @@ var (
 		"constelation",
 		"ra",
 		"dec",
+		"ra_radians",
+		"dec_radians",
 		"magnitude",
 		"name",
 		"m",
@@ -42,6 +44,8 @@ type (
 		Constellation *string  `json:"constellation"`
 		RA            string   `json:"ra"`
 		Decl          string   `json:"decl"`
+		RARadians     float64  `json:"ra_radians"`
+		DecRadians    float64  `json:"dec_radians"`
 		Magnitude     *float64 `json:"magnitude"`
 		Name          *string  `json:"name"`
 		HA            float64  `json:"ha"`
@@ -83,7 +87,7 @@ func GetObject(id string) (o Object, err error) {
 	sel.Where("id = ?", id)
 	q, args, _ := sel.ToSql()
 
-	return o, db.QueryRow(q, args...).Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &o.M, &o.Visible)
+	return o, db.QueryRow(q, args...).Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.RARadians, &o.DecRadians, &o.Magnitude, &o.Name, &o.M, &o.Visible)
 }
 
 func GetObjects(page QueryOption, opts ...QueryOption) (objs Objects, err error) {
@@ -120,7 +124,7 @@ func GetObjects(page QueryOption, opts ...QueryOption) (objs Objects, err error)
 	objs.Objects = []Object{}
 	for rows.Next() {
 		var o Object
-		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.Magnitude, &o.Name, &o.M, &o.Visible); err != nil {
+		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.RARadians, &o.DecRadians, &o.Magnitude, &o.Name, &o.M, &o.Visible); err != nil {
 			return objs, err
 		}
 
@@ -135,7 +139,7 @@ func visible(sel *sqrl.SelectBuilder) {
 	lst := mnt.LocalSiderealTime(t)
 	lst = (lst / 24) * 360
 	lat, _ := mnt.GetCoordinates()
-	sel.Column("((dec_degrees > ?) OR (cos(? - ra_degrees) > (-1*tan(?)*tan(dec_degrees)))) AS visible", mnt.Rad(90-lat), mnt.Rad(lst), mnt.Rad(lat))
+	sel.Column("((dec_radians > ?) OR (cos(? - ra_radians) > (-1*tan(?)*tan(dec_radians)))) AS visible", mnt.Rad(90-lat), mnt.Rad(lst), mnt.Rad(lat))
 }
 
 func Visible(sel *sqrl.SelectBuilder) {

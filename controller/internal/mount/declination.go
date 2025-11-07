@@ -15,7 +15,7 @@ type (
 		line       *gpiocdev.Line
 		address    int
 		state      state
-		dec        string
+		dec        float64
 		direction  float64
 		microsteps int
 	}
@@ -26,31 +26,19 @@ func (d *Declination) slewing() bool {
 }
 
 // TODO: make sure motor always moves back across local meridian when slewing
-func (d *Declination) slew(dec string) (uint16, error) {
-	currentDeg, err := d.degrees(d.dec)
-	if err != nil {
-		return 0, err
-	}
+func (d *Declination) slew(dec float64) (uint16, error) {
+	r := dec - d.dec
 
-	deg, err := d.degrees(dec)
-	if err != nil {
-		return 0, err
-	}
-
-	deg = deg - currentDeg
-
-	if deg < 0 {
+	if r < 0 {
 		d.direction = -1
-		deg *= -1
+		r *= -1
 	} else {
 		d.direction = 1
 	}
 
 	d.dec = dec
 
-	steps := degreesToSteps(deg)
-	log.Printf("dec: current deg: %f, degrees: %f, steps: %d\n", currentDeg, deg, steps)
-
+	steps := radsToSteps(r)
 	if steps < 100 {
 		d.state = Slew
 	} else {
