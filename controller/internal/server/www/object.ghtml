@@ -37,7 +37,7 @@
       <div>Visible</div>
       <div>{{.Visible}}</div>
     </div>
-    <button onclick="goto()">Goto</button>
+    <button {{if .Visible}}onclick="goto()"{{else}}onclick="alert('object not visible')"{{end}}>Goto</button>
   </body>
   <script>
    function goto() {

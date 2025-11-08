@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -176,6 +177,10 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 	obj, err := repo.GetObject(r.PathValue("id"))
 	if err != nil {
 		return err
+	}
+
+	if !obj.Visible {
+		return fmt.Errorf("refusing to goto object that isn't visible")
 	}
 
 	if err := s.mount.Goto(obj.RARadians, obj.DecRadians); err != nil {

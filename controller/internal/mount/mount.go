@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -196,23 +195,9 @@ func parseFloats(in ...string) ([]float64, error) {
 	return out, nil
 }
 
-func splitCoord(s string) ([]string, error) {
-	s = strings.TrimSpace(s)
-	matches := strings.Split(s, ":")
-	if len(matches) < 3 {
-		return nil, fmt.Errorf("Cannot parse 'HDM' string: %s", s)
-	}
-
-	for i, m := range matches {
-		matches[i] = strings.TrimSpace(m)
-	}
-
-	return matches, nil
-}
-
 // TODO: handle dec gear ratio
 func radsToSteps(r float64) uint16 {
-	return uint16((r / (2 * math.Pi)) * 100 * 200)
+	return uint16(((r / (2 * math.Pi)) * 100 * 200) / 2) // divide by 2 because tmc2209 produces 2 index pulses per microstep
 }
 
 func rad(d float64) float64 {
