@@ -32,6 +32,11 @@ type (
 		SetTime   bool    `json:"-"`
 	}
 
+	coords struct {
+		HourAngle float64 `json:"hour_angle"`
+		Dec       float64 `json:"dec"`
+	}
+
 	movement struct {
 		Hz float64 `json:"hz"`
 	}
@@ -70,6 +75,7 @@ func New(m *mount.Mount) (*Server, error) {
 	}
 
 	srv.mux.HandleFunc("GET /", handle(srv.index))
+	srv.mux.HandleFunc("POST /", handle(srv.gotoCoords))
 	srv.mux.HandleFunc("GET /{id}", handle(srv.object))
 	srv.mux.HandleFunc("GET /static/{pth}", handle(serveStatic))
 	srv.mux.HandleFunc("GET /objects", handle(srv.getObjects))
@@ -183,7 +189,17 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("refusing to goto object that isn't visible")
 	}
 
-	if err := s.mount.Goto(obj.RARadians, obj.DecRadians); err != nil {
+	if err := s.mount.Goto(s.mount.WithRA(obj.RARadians, time.Now()), obj.DecRadians); err != nil {
+		return err
+	}
+
+	return json.NewEncoder(w).Encode(obj)
+}
+
+func (s Server) gotoCoords(w http.ResponseWriter, r *http.Request) error {
+	var obj coords
+
+	if err := s.mount.Goto(s.mount.WithHA(obj.HourAngle, time.Now()), obj.Dec); err != nil {
 		return err
 	}
 

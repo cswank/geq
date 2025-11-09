@@ -119,13 +119,26 @@ func (m *Mount) Move(axis string, hz float64) error {
 	return nil
 }
 
-func (m *Mount) Goto(ra, dec float64) error {
+func (m *Mount) WithRA(ra float64, ts time.Time) func() (float64, time.Time) {
+	return func() (float64, time.Time) {
+		lst := m.ra.localSiderealTime(ts)
+		return lst - ((ra / (2 * math.Pi)) / 24), ts
+	}
+}
+
+func (m *Mount) WithHA(ha float64, ts time.Time) func() (float64, time.Time) {
+	return func() (float64, time.Time) {
+		return ha, ts
+	}
+}
+
+func (m *Mount) Goto(ra func() (float64, time.Time), dec float64) error {
+	ha, ts := ra()
 	if m.ra.slewing() || m.dec.slewing() {
 		return fmt.Errorf("refusing to goto object while the mount is slewing")
 	}
 
-	ts := time.Now()
-	rSteps, err := m.ra.slew(ra, ts)
+	rSteps, err := m.ra.slew(ha, ts)
 	if err != nil {
 		return err
 	}

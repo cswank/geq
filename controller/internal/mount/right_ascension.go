@@ -36,9 +36,7 @@ func (r *RA) slewing() bool {
 	return r.state == Slew || r.state == SlowSlew
 }
 
-func (r *RA) slew(ra float64, t time.Time) (uint16, error) {
-	ha := r.hourAngle(ra, t)
-
+func (r *RA) slew(ha float64, t time.Time) (uint16, error) {
 	rads := ha - r.ha
 	if r.state == Tracking {
 		rads += rad(15 * time.Since(r.start).Minutes() / 60)
