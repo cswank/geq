@@ -12,7 +12,7 @@ import (
 
 const (
 	j1970         float64 = 2440587.5
-	trackingSpeed float64 = 100 / (24 * 60)
+	trackingSpeed float64 = -100 / (24 * 60)
 )
 
 type (
@@ -103,7 +103,7 @@ func (r *RA) listen(evt gpiocdev.LineEvent) {
 		if err := r.motor.Microsteps(256); err != nil {
 			log.Printf("error setting microsteps: %s", err)
 		}
-		if err := r.motor.Move(trackingSpeed * r.direction); err != nil {
+		if err := r.motor.Move(trackingSpeed); err != nil {
 			log.Printf("error tracking motor: %s", err)
 		}
 		r.start = time.Now()

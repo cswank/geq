@@ -81,7 +81,7 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Mount, error) {
 		port:     port,
 		latitude: lat,
 		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ha: 0, longitude: lon},
-		dec:      Declination{dec: math.Pi / 4, lock: &lock, motor: decMotor},
+		dec:      Declination{dec: math.Pi / 2, lock: &lock, motor: decMotor},
 	}
 
 	if device != "" {
@@ -128,7 +128,7 @@ func (m *Mount) WithRA(ra float64, ts time.Time) func() (float64, time.Time) {
 
 func (m *Mount) WithHA(ha float64, ts time.Time) func() (float64, time.Time) {
 	return func() (float64, time.Time) {
-		return ha, ts
+		return rad(ha), ts
 	}
 }
 
@@ -147,6 +147,8 @@ func (m *Mount) Goto(ra func() (float64, time.Time), dec float64) error {
 	if err != nil {
 		return err
 	}
+
+	log.Printf("ra steps: %d, dec steps: %d, dec: %f", rSteps, dSteps, dec)
 
 	return m.count(rSteps, dSteps)
 }

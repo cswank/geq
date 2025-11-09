@@ -198,8 +198,11 @@ func (s Server) gotoObject(w http.ResponseWriter, r *http.Request) error {
 
 func (s Server) gotoCoords(w http.ResponseWriter, r *http.Request) error {
 	var obj coords
+	if err := json.NewDecoder(r.Body).Decode(&obj); err != nil {
+		return err
+	}
 
-	if err := s.mount.Goto(s.mount.WithHA(obj.HourAngle, time.Now()), obj.Dec); err != nil {
+	if err := s.mount.Goto(s.mount.WithHA(obj.HourAngle, time.Now()), s.mount.Rad(obj.Dec)); err != nil {
 		return err
 	}
 
