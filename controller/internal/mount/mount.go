@@ -120,9 +120,8 @@ func (m *Mount) Move(axis string, hz float64) error {
 
 func (m Mount) WithRA(ra float64, ts time.Time) func() (float64, time.Time) {
 	return func() (float64, time.Time) {
-		lst := m.ra.localSiderealTime(ts)
-		fmt.Printf("lst: %f, ra: %f\n", lst, ra)
-		return rad(lst) - (ra / (2 * math.Pi) / 24), ts
+		lst := m.ra.localSiderealTime(ts) //0-24
+		return ((lst / 24) * 2 * math.Pi) - ra, ts
 	}
 }
 
@@ -161,8 +160,7 @@ func (m *Mount) Goto(ra func() (float64, time.Time), dec float64) error {
 
 func (m *Mount) HourAngle(ra float64, ts time.Time) string {
 	lst := m.ra.localSiderealTime(ts)
-
-	ha := lst - ((ra / (2 * math.Pi)) / 24)
+	ha := lst - ((ra / (2 * math.Pi)) * 24)
 	hah := math.Floor(ha)
 	ham := (ha - hah) * 60
 
