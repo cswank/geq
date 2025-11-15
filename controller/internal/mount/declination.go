@@ -18,6 +18,7 @@ type (
 		dec        float64
 		direction  float64
 		microsteps int
+		gearRatio  float64
 	}
 )
 
@@ -38,7 +39,7 @@ func (d *Declination) slew(dec float64) (uint16, error) {
 
 	d.dec = dec
 
-	steps := radsToSteps(r)
+	steps := d.radsToSteps(r)
 	if steps < 100 {
 		d.state = Slew
 	} else {
@@ -70,4 +71,8 @@ func (d *Declination) listen(evt gpiocdev.LineEvent) {
 	}
 
 	d.lock.Unlock()
+}
+
+func (d Declination) radsToSteps(r float64) uint16 {
+	return radsToSteps(r, d.gearRatio)
 }

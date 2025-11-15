@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"strconv"
 	"sync"
 	"time"
 
@@ -80,8 +79,8 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Mount, error) {
 	t := Mount{
 		port:     port,
 		latitude: lat,
-		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ha: 0, longitude: lon},
-		dec:      Declination{dec: math.Pi / 2, lock: &lock, motor: decMotor},
+		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ha: 0, longitude: lon, gearRatio: 100},
+		dec:      Declination{dec: math.Pi / 2, lock: &lock, motor: decMotor, gearRatio: 136 / 16},
 	}
 
 	if device != "" {
@@ -119,18 +118,24 @@ func (m *Mount) Move(axis string, hz float64) error {
 	return nil
 }
 
-func (m *Mount) WithRA(ra float64, ts time.Time) func() (float64, time.Time) {
+func (m Mount) WithRA(ra float64, ts time.Time) func() (float64, time.Time) {
 	return func() (float64, time.Time) {
 		lst := m.ra.localSiderealTime(ts)
 		return lst - ((ra / (2 * math.Pi)) / 24), ts
 	}
 }
 
-func (m *Mount) WithHA(ha float64, ts time.Time) func() (float64, time.Time) {
+func (m Mount) WithHA(ha float64, ts time.Time) func() (float64, time.Time) {
 	return func() (float64, time.Time) {
 		return rad(ha), ts
 	}
 }
+
+// func (m Mount) WithSteps(steps float64, ts time.Time) func() (float64, time.Time) {
+// 	return func() (float64, time.Time) {
+// 		return rad(ha), ts
+// 	}
+// }
 
 func (m *Mount) Goto(ra func() (float64, time.Time), dec float64) error {
 	ha, ts := ra()
@@ -197,22 +202,19 @@ func (m Mount) Close() {
 	m.dec.line.Close()
 }
 
-func parseFloats(in ...string) ([]float64, error) {
-	out := make([]float64, len(in))
-	for i, s := range in {
-		d, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = d
+func (m Mount) StepsToRads(axis string, s uint16) float64 {
+	if axis == "ra" {
+		return stepsToRads(s, m.ra.gearRatio)
 	}
-
-	return out, nil
+	return stepsToRads(s, m.dec.gearRatio)
 }
 
-// TODO: handle dec gear ratio
-func radsToSteps(r float64) uint16 {
-	return uint16(((r / (2 * math.Pi)) * 100 * 200) / 2) // divide by 2 because tmc2209 produces 2 index pulses per microstep
+func stepsToRads(s uint16, gearRatio float64) float64 {
+	return (float64(s*2) / gearRatio) * (2 * math.Pi)
+}
+
+func radsToSteps(rads, gearRatio float64) uint16 {
+	return uint16(((rads / (2 * math.Pi)) * gearRatio * 200) / 2) // divide by 2 because tmc2209 produces 2 index pulses per microstep
 }
 
 func rad(d float64) float64 {

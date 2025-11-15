@@ -38,7 +38,8 @@ type (
 	}
 
 	movement struct {
-		Hz float64 `json:"hz"`
+		Hz    float64 `json:"hz"`
+		Steps float64 `json:"steps"`
 	}
 
 	index struct {

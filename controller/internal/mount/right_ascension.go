@@ -24,6 +24,7 @@ type (
 		state      state
 		direction  float64
 		microsteps int
+		gearRatio  float64
 
 		// start is the time at which tracking began
 		start time.Time
@@ -49,7 +50,7 @@ func (r *RA) slew(ha float64, t time.Time) (uint16, error) {
 		r.direction = 1
 	}
 
-	steps := radsToSteps(rads)
+	steps := r.radsToSteps(rads)
 	log.Printf("ra: current ha: %f, ha: %f, radians: %f, steps: %d, diration: %f\n", r.ha, ha, rads, steps, r.direction)
 
 	r.ha = ha
@@ -65,8 +66,8 @@ func (r *RA) slew(ha float64, t time.Time) (uint16, error) {
 	return steps, nil
 }
 
-func (r RA) hourAngle(ra float64, t time.Time) float64 {
-	return ((r.localSiderealTime(t) / 24) * 2 * math.Pi) - ra
+func (r RA) radsToSteps(rads float64) uint16 {
+	return radsToSteps(rads, r.gearRatio)
 }
 
 func (r RA) localSiderealTime(datetime time.Time) float64 {

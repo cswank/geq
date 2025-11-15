@@ -16,9 +16,9 @@
 
      .axes {
          display: grid;
-         grid-template-columns: auto auto auto auto;
+         grid-template-columns: auto auto auto auto auto auto auto auto;
          padding: 1px 1px 20px 1px;
-         width: 400px;
+         width: 600px;
      }
      .axes div {         
          padding: 10px;
@@ -34,13 +34,21 @@
   <body>
     <div class="axes">
       <div>Right Ascension</div>
+      <div><button class="speed" type="text" onclick="steps('ra', -100)"><<</button></div>
+      <div><button class="speed" type="text" onclick="steps('ra', -10)"><</button></div>
       <div><button class="speed" type="text" onclick="move('ra', -0.1)">-</button></div>
       <div><button class="speed" type="text" onclick="move('ra', 0)">stop</button></div>
       <div><button class="speed" type="text" onclick="move('ra', 0.1)">+</button></div>
+      <div><button class="speed" type="text" onclick="steps('ra', 10)">></button></div>
+      <div><button class="speed" type="text" onclick="steps('ra', 100)">>></button></div>
       <div>Declination</div>
+      <div><button class="speed" type="text" onclick="steps('dec', -100)"><<</button></div>
+      <div><button class="speed" type="text" onclick="steps('dec', -10)"><</button></div>
       <div><button class="speed" type="text" onclick="move('dec', -0.1)">-</button></div>
       <div><button class="speed" type="text" onclick="move('dec', 0)">stop</button></div>
       <div><button class="speed" type="text" onclick="move('dec', 0.1)">+</button></div>
+      <div><button class="speed" type="text" onclick="steps('dec', 10)">></button></div>
+      <div><button class="speed" type="text" onclick="steps('dec', 100)">>></button></div>
     </div>
     <div class="coords">
       <div>Latitude</div>
