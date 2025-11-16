@@ -104,8 +104,8 @@ func GetObject(id string) (o Object, err error) {
 
 func GetObjects(page QueryOption, opts ...QueryOption) (objs Objects, err error) {
 	cte := sqrl.Select(columns...).
-		From("objects")
-
+		From("objects").
+		OrderBy("id")
 	visible(cte)
 
 	for _, o := range opts {
