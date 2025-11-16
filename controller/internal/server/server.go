@@ -156,7 +156,6 @@ func (s Server) object(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	o.HourAngle = s.mount.HourAngle(o.RARadians, time.Now())
 	return s.obj.ExecuteTemplate(w, "object", o)
 }
 
@@ -174,8 +173,6 @@ func (s Server) getObject(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-
-	obj.HourAngle = s.mount.HourAngle(obj.RARadians, time.Now())
 
 	return json.NewEncoder(w).Encode(obj)
 }

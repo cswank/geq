@@ -95,8 +95,9 @@
 
                  return [
                      gridjs.html(`<a class='${style}' href='/${obj.id}'>${id}</a>`),
+                     obj.hour_angle,
+                     obj.dec,
                      obj.type,
-                     obj.constellation,
                      obj.name
              ]}),
              total: data => data.total
@@ -107,13 +108,17 @@
                  width: "180px"
              },
              {
+                 name: "hour angle",
+                 width: "100px"
+             },
+             {
+                 name: "dec",
+                 width: "100px"
+             },
+             {
                  name: "type",
                  width: "100px",
                  filter: true
-             },
-             {
-                 name: "const.",
-                 width: "100px"
              },
              {
                  name: "name"

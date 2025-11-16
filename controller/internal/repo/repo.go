@@ -2,12 +2,14 @@ package repo
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"embed"
 	"fmt"
 	"time"
 
 	"github.com/cswank/geq/controller/internal/mount"
 	"github.com/parsyl/sqrl"
+	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 	"modernc.org/sqlite/vfs"
 )
@@ -27,6 +29,7 @@ var (
 		"magnitude",
 		"name",
 		"m",
+		"hour_angle(ra_radians)",
 	}
 
 	fs *vfs.FS
@@ -43,7 +46,7 @@ type (
 		Type          string   `json:"type"`
 		Constellation *string  `json:"constellation"`
 		RA            string   `json:"ra"`
-		Decl          string   `json:"decl"`
+		Dec           string   `json:"dec"`
 		RARadians     float64  `json:"ra_radians"`
 		DecRadians    float64  `json:"dec_radians"`
 		Magnitude     *float64 `json:"magnitude"`
@@ -70,6 +73,15 @@ func Init(m *mount.Mount) (err error) {
 		return err
 	}
 
+	hourAngle := func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+		ra := args[0].(float64)
+		return m.HourAngle(ra, time.Now()), nil
+	}
+
+	if err := sqlite.RegisterScalarFunction("hour_angle", 1, hourAngle); err != nil {
+		return fmt.Errorf("unable to register func: %s", err)
+	}
+
 	db, err = sql.Open("sqlite", "file:files/objects.db?vfs="+fn)
 	if err != nil {
 		return err
@@ -87,7 +99,7 @@ func GetObject(id string) (o Object, err error) {
 	sel.Where("id = ?", id)
 	q, args, _ := sel.ToSql()
 
-	return o, db.QueryRow(q, args...).Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.RARadians, &o.DecRadians, &o.Magnitude, &o.Name, &o.M, &o.Visible)
+	return o, db.QueryRow(q, args...).Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Dec, &o.RARadians, &o.DecRadians, &o.Magnitude, &o.Name, &o.M, &o.HourAngle, &o.Visible)
 }
 
 func GetObjects(page QueryOption, opts ...QueryOption) (objs Objects, err error) {
@@ -124,7 +136,7 @@ func GetObjects(page QueryOption, opts ...QueryOption) (objs Objects, err error)
 	objs.Objects = []Object{}
 	for rows.Next() {
 		var o Object
-		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Decl, &o.RARadians, &o.DecRadians, &o.Magnitude, &o.Name, &o.M, &o.Visible); err != nil {
+		if err := rows.Scan(&o.ID, &o.Type, &o.Constellation, &o.RA, &o.Dec, &o.RARadians, &o.DecRadians, &o.Magnitude, &o.Name, &o.M, &o.HourAngle, &o.Visible); err != nil {
 			return objs, err
 		}
 
