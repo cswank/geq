@@ -28,8 +28,8 @@
       <div>{{.Constellation}}</div>
       <div>RA</div>
       <div>{{.RA}}</div>
-      <div>Decl</div>
-      <div>{{.Decl}}</div>
+      <div>Dec</div>
+      <div>{{.Dec}}</div>
       <div>Magnitude</div>
       <div>{{.Magnitude}}</div>
       <div>Hour Angle</div>

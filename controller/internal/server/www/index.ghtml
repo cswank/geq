@@ -18,34 +18,29 @@
     <input type="checkbox" id="named" onclick="filter()"/>
     <label for="named">Named</label>
 
-    <div id="wrapper"></div>
+    <div id="table"></div>
+
     <script src="/static/grid.umd.js"></script>
     <script>
-     const m = document.getElementById("messier");
-     const n = document.getElementById("named");
-     const v = document.getElementById("visible");
+     const filters = {
+         messier: document.getElementById("messier"),
+         named: document.getElementById("named"),
+         visible: document.getElementById("visible")
+     };
 
      document.addEventListener('DOMContentLoaded', () => {
          const urlParams = new URLSearchParams(window.location.search);
-         m.checked = urlParams.get('messier') == "true";
-         n.checked = urlParams.get('named') == "true";
-         v.checked = urlParams.get('visible') == "true";
+         filters.messier.checked = urlParams.get('messier') == "true";
+         filters.named.checked = urlParams.get('named') == "true";
+         filters.visible.checked = urlParams.get('visible') == "true";
      });
 
      function filter() {
-         addQuery('messier', m.checked.toString());
-         addQuery('visible', v.checked.toString());
-         addQuery('named', n.checked.toString());
+         addQuery('messier', filters.messier.checked.toString());
+         addQuery('visible', filters.visible.checked.toString());
+         addQuery('named', filters.named.checked.toString());
 
          grid.forceRender();
-     }
-
-     function filters() {
-         return {
-             'messier': m.checked.toString(),
-             'visible': v.checked.toString(),
-             'named': n.checked.toString()
-         }
      }
 
      function addQuery(key, value) {
@@ -63,8 +58,8 @@
                      const url = new URL(prev, document.location);
                      url.searchParams.append('page', page);
                      url.searchParams.append('pagesize', limit);
-                     Object.entries(filters()).forEach(([key, value]) => {
-                         url.searchParams.append(key, value);
+                     Object.entries(filters).forEach(([key, value]) => {
+                         url.searchParams.append(key, value.checked.toString());
                      });
                      console.log(url.href);
                      return url.href;
@@ -105,10 +100,10 @@
          columns: [
              {
                  name: "id",
-                 width: "180px"
+                 width: "150px"
              },
              {
-                 name: "hour angle",
+                 name: "hour ∠",
                  width: "100px"
              },
              {
@@ -124,8 +119,8 @@
                  name: "name"
              },
          ],
-         sort: true
-     }).render(document.getElementById("wrapper"));
+         sort: false
+     }).render(document.getElementById("table"));
     </script>
   </body>
 </html>
