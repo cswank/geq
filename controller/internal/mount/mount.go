@@ -120,14 +120,13 @@ func (m *Mount) Move(axis string, hz float64) error {
 
 func (m Mount) WithRA(ra float64, ts time.Time) func() (float64, time.Time) {
 	return func() (float64, time.Time) {
-		lst := m.ra.localSiderealTime(ts) //0-24
-		return ((lst / 24) * 2 * math.Pi) - ra, ts
+		return hoursToRadians(m.ra.localSiderealTime(ts)) - ra, ts
 	}
 }
 
 func (m Mount) WithHA(ha float64, ts time.Time) func() (float64, time.Time) {
 	return func() (float64, time.Time) {
-		return rad(ha), ts
+		return degreesToRadians(ha), ts
 	}
 }
 
@@ -159,8 +158,7 @@ func (m *Mount) Goto(ra func() (float64, time.Time), dec float64) error {
 }
 
 func (m *Mount) HourAngle(ra float64, ts time.Time) string {
-	lst := m.ra.localSiderealTime(ts)
-	ha := lst - ((ra / (2 * math.Pi)) * 24)
+	ha := m.ra.localSiderealTime(ts) - radiansToHours(ra)
 	hah := math.Floor(ha)
 	ham := (ha - hah) * 60
 
@@ -172,7 +170,7 @@ func (m Mount) LocalSiderealTime(ts time.Time) float64 {
 }
 
 func (m Mount) Rad(deg float64) float64 {
-	return rad(deg)
+	return degreesToRadians(deg)
 }
 
 // count sends the ra and decl steps to mcu that actually does the counting
@@ -203,19 +201,27 @@ func (m Mount) Close() {
 
 func (m Mount) StepsToRads(axis string, s uint16) float64 {
 	if axis == "ra" {
-		return stepsToRads(s, m.ra.gearRatio)
+		return stepsToRadians(s, m.ra.gearRatio)
 	}
-	return stepsToRads(s, m.dec.gearRatio)
+	return stepsToRadians(s, m.dec.gearRatio)
 }
 
-func stepsToRads(s uint16, gearRatio float64) float64 {
+func radiansToHours(r float64) float64 {
+	return ((r / (2 * math.Pi)) * 24)
+}
+
+func hoursToRadians(h float64) float64 {
+	return ((h / 24) * 2 * math.Pi)
+}
+
+func stepsToRadians(s uint16, gearRatio float64) float64 {
 	return (float64(s*2) / gearRatio) * (2 * math.Pi)
 }
 
-func radsToSteps(rads, gearRatio float64) uint16 {
+func radiansToSteps(rads, gearRatio float64) uint16 {
 	return uint16(((rads / (2 * math.Pi)) * gearRatio * 200) / 2) // divide by 2 because tmc2209 produces 2 index pulses per microstep
 }
 
-func rad(d float64) float64 {
+func degreesToRadians(d float64) float64 {
 	return d * (math.Pi / 180)
 }

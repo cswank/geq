@@ -40,7 +40,7 @@ func (r *RA) slewing() bool {
 func (r *RA) slew(ha float64, t time.Time) (uint16, error) {
 	rads := ha - r.ha
 	if r.state == Tracking {
-		rads += rad(15 * time.Since(r.start).Minutes() / 60)
+		rads += degreesToRadians(15 * time.Since(r.start).Minutes() / 60)
 	}
 
 	if rads < 0 {
@@ -67,7 +67,7 @@ func (r *RA) slew(ha float64, t time.Time) (uint16, error) {
 }
 
 func (r RA) radsToSteps(rads float64) uint16 {
-	return radsToSteps(rads, r.gearRatio)
+	return radiansToSteps(rads, r.gearRatio)
 }
 
 func (r RA) localSiderealTime(datetime time.Time) float64 {

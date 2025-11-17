@@ -74,5 +74,5 @@ func (d *Declination) listen(evt gpiocdev.LineEvent) {
 }
 
 func (d Declination) radsToSteps(r float64) uint16 {
-	return radsToSteps(r, d.gearRatio)
+	return radiansToSteps(r, d.gearRatio)
 }

@@ -73,13 +73,8 @@ func Init(m *mount.Mount) (err error) {
 		return err
 	}
 
-	hourAngle := func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
-		ra := args[0].(float64)
-		return m.HourAngle(ra, time.Now()), nil
-	}
-
 	if err := sqlite.RegisterScalarFunction("hour_angle", 1, hourAngle); err != nil {
-		return fmt.Errorf("unable to register func: %s", err)
+		return fmt.Errorf("unable to register hour_angle func: %s", err)
 	}
 
 	db, err = sql.Open("sqlite", "file:files/objects.db?vfs="+fn)
@@ -88,6 +83,11 @@ func Init(m *mount.Mount) (err error) {
 	}
 
 	return nil
+}
+
+func hourAngle(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+	ra := args[0].(float64)
+	return mnt.HourAngle(ra, time.Now()), nil
 }
 
 func GetObject(id string) (o Object, err error) {
