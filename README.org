@@ -1,1 +1,3 @@
 German Equitorial Mount
+
+(thanks to https://github.com/mattiaverga/OpenNGC for the data used to build the embedded database)

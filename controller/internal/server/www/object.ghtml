@@ -19,7 +19,7 @@
     </style>
   </head>
   <body>
-    <h2>M{{.ID}}</h2>
+    <h2>{{.ID}}</h2>
     <h3>{{.Name}}</h3>
     <div class="container">
       <div>Type</div>
