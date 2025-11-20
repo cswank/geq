@@ -62,11 +62,7 @@
 
      function filter() {
          const url = new URL(window.location.href);
-         const params = new URLSearchParams(url.search);
-         for (const key of [...params.keys()]) {
-             params.delete(key);
-         }
-         url.search = params.toString();
+         url.search = '';
          filters.forEach((val) => {
              addQuery(url, val.param, val.f(val.em.checked), val.f(true));
          });
