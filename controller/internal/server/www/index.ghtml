@@ -17,36 +17,69 @@
     <label for="messier">Messier</label>
     <input type="checkbox" id="named" onclick="filter()"/>
     <label for="named">Named</label>
+    <input type="checkbox" id="nebula" onclick="filter()"/>
+    <label for="nebula">Nebula</label>
+    <input type="checkbox" id="nova" onclick="filter()"/>
+    <label for="nova">Nova</label>
+    <input type="checkbox" id="galaxy" onclick="filter()"/>
+    <label for="galaxy">Galaxy</label>
+    <input type="checkbox" id="galaxy_group" onclick="filter()"/>
+    <label for="galaxy_group">Galaxy Group</label>
+    <input type="checkbox" id="galaxy_triple" onclick="filter()"/>
+    <label for="galaxy_triple">Galaxy Triple</label>
+    <input type="checkbox" id="galaxy_pair" onclick="filter()"/>
+    <label for="galaxy_pair">Galaxy Pair</label>
+    <input type="checkbox" id="double_star" onclick="filter()"/>
+    <label for="double_star">Double Star</label>
 
     <div id="table"></div>
 
     <script src="/static/grid.umd.js"></script>
     <script>
-     const filters = {
-         messier: document.getElementById("messier"),
-         named: document.getElementById("named"),
-         visible: document.getElementById("visible")
-     };
+     const filters = [
+         {em: document.getElementById("messier"), param: "messier", f: function(checked) {return checked.toString()}},
+         {em: document.getElementById("named"), param: "named", f: function(checked) {return checked.toString()}},
+         {em: document.getElementById("visible"), param: "visible", f: function(checked) {return checked.toString()}},
+         {em: document.getElementById("nova"), param: "type", f: function(checked) {return checked ? "Nova": "false"}},
+         {em: document.getElementById("galaxy"), param: "type", f: function(checked) {return checked ? "G": "false"}},
+         {em: document.getElementById("galaxy_group"), param: "type", f: function(checked) {return checked ? "GGroup": "false"}},
+         {em: document.getElementById("galaxy_triple"), param: "type", f: function(checked) {return checked ? "GTrpl": "false"}},
+         {em: document.getElementById("galaxy_pair"), param: "type", f: function(checked) {return checked ? "GPair": "false"}},
+         {em: document.getElementById("nebula"), param: "type", f: function(checked) {return checked ? "Neb": "false"}},
+         {em: document.getElementById("double_star"), param: "type", f: function(checked) {return checked ? "**": "false"}}
+     ];
 
      document.addEventListener('DOMContentLoaded', () => {
          const urlParams = new URLSearchParams(window.location.search);
-         filters.messier.checked = urlParams.get('messier') == "true";
-         filters.named.checked = urlParams.get('named') == "true";
-         filters.visible.checked = urlParams.get('visible') == "true";
+         filters.forEach((val) => {
+             if (val.param == "type") {
+                 val.em.checked = urlParams.getAll(val.param).includes(val.f(true));
+             } else {
+                 val.em.checked = urlParams.get(val.param) == val.f(val.em.checked);
+             }
+         });
      });
 
      function filter() {
-         addQuery('messier', filters.messier.checked.toString());
-         addQuery('visible', filters.visible.checked.toString());
-         addQuery('named', filters.named.checked.toString());
-
+         const url = new URL(window.location.href);
+         const params = new URLSearchParams(url.search);
+         for (const key of [...params.keys()]) {
+             params.delete(key);
+         }
+         url.search = params.toString();
+         filters.forEach((val) => {
+             addQuery(url, val.param, val.f(val.em.checked), val.f(true));
+         });
+         window.history.replaceState({}, '', url);
          grid.forceRender();
      }
 
-     function addQuery(key, value) {
-         const url = new URL(window.location.href);
-         url.searchParams.set(key, value);
-         window.history.replaceState({}, '', url);
+     function addQuery(url, key, state, value) {
+         if (state == "true") {
+             url.searchParams.set(key, value);
+         } else if (key == "type" && state == value) {
+             url.searchParams.append(key, value);
+         }
      }
 
      const grid = new gridjs.Grid({
@@ -58,10 +91,9 @@
                      const url = new URL(prev, document.location);
                      url.searchParams.append('page', page);
                      url.searchParams.append('pagesize', limit);
-                     Object.entries(filters).forEach(([key, value]) => {
-                         url.searchParams.append(key, value.checked.toString());
+                     filters.forEach((val) => {
+                         addQuery(url, val.param, val.f(val.em.checked), val.f(true));
                      });
-                     console.log(url.href);
                      return url.href;
                  }
              }
@@ -90,6 +122,7 @@
 
                  return [
                      gridjs.html(`<a class='${style}' href='/${obj.id}'>${id}</a>`),
+                     obj.magnitude,
                      obj.hour_angle,
                      obj.dec,
                      obj.type,
@@ -103,8 +136,12 @@
                  width: "150px"
              },
              {
-                 name: "hour ∠",
-                 width: "100px"
+                 name: "mag.",
+                 width: "70px"
+             },
+             {
+                 name: "∠",
+                 width: "60px"
              },
              {
                  name: "dec",
@@ -112,8 +149,7 @@
              },
              {
                  name: "type",
-                 width: "100px",
-                 filter: true
+                 width: "60px"
              },
              {
                  name: "name"

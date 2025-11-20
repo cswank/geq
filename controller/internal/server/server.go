@@ -91,8 +91,8 @@ func New(m *mount.Mount) (*Server, error) {
 }
 
 func (s Server) Start() error {
-	log.Println("Server is running on port 8080")
-	return http.ListenAndServe(":8080", s.mux)
+	log.Println("Server is running on port 3434")
+	return http.ListenAndServe(":3434", s.mux)
 }
 
 type handler func(w http.ResponseWriter, r *http.Request) error
@@ -232,6 +232,10 @@ func (s Server) doGetObjects(r *http.Request) (objs repo.Objects, err error) {
 
 	if s := r.URL.Query().Get("name"); s != "" {
 		opts = append(opts, repo.Name(s))
+	}
+
+	if types := r.URL.Query()["type"]; len(types) > 0 {
+		opts = append(opts, repo.Types(types))
 	}
 
 	var pg repo.QueryOption

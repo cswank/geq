@@ -105,7 +105,7 @@ func GetObject(id string) (o Object, err error) {
 func GetObjects(page QueryOption, opts ...QueryOption) (objs Objects, err error) {
 	cte := sqrl.Select(columns...).
 		From("objects").
-		OrderBy("id")
+		OrderBy("magnitude DESC NULLS LAST")
 	visible(cte)
 
 	for _, o := range opts {
@@ -165,6 +165,20 @@ func Named(sel *sqrl.SelectBuilder) {
 func Messier(sel *sqrl.SelectBuilder) {
 	sel.Where("m IS NOT NULL").
 		OrderBy("m")
+}
+
+func Types(types []string) QueryOption {
+	return func(sel *sqrl.SelectBuilder) {
+		var or sqrl.Or
+		for _, typ := range types {
+			if typ != "" {
+				or = append(or, sqrl.Eq{"type": typ})
+			}
+		}
+		if len(or) > 0 {
+			sel.Where(or)
+		}
+	}
 }
 
 func Name(s string) QueryOption {
