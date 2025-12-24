@@ -55,6 +55,10 @@ type (
 		obj   *template.Template
 		set   *template.Template
 	}
+
+	indexInput struct {
+		LocalSiderealTime string
+	}
 )
 
 func New(m *mount.Mount) (*Server, error) {
@@ -114,7 +118,7 @@ func (s Server) index(w http.ResponseWriter, r *http.Request) error {
 		return s.setup(w, r)
 	}
 
-	return s.idx.ExecuteTemplate(w, "index", nil)
+	return s.idx.ExecuteTemplate(w, "index", indexInput{LocalSiderealTime: s.localSiderealTime()})
 }
 
 func (s Server) setup(w http.ResponseWriter, r *http.Request) error {
@@ -258,6 +262,16 @@ func (s Server) doGetObjects(r *http.Request) (objs repo.Objects, err error) {
 	}
 
 	return repo.GetObjects(pg, opts...)
+}
+
+func (s Server) localSiderealTime() string {
+	gstHours := s.mount.LocalSiderealTime(time.Now())
+	hours := int(gstHours)
+	remainder := (gstHours - float64(hours)) * 60.0
+	minutes := int(remainder)
+	seconds := int((remainder - float64(minutes)) * 60.0)
+
+	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 }
 
 func serveStatic(w http.ResponseWriter, req *http.Request) error {

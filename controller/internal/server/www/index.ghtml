@@ -8,35 +8,63 @@
          background-color: transparent;
          text-decoration: none;
      }
+
+     .header {
+         display: grid;
+         grid-template-columns: auto auto;
+         padding: 1px 1px 20px 1px;
+     }
+     .header div.time {
+         text-align: right;
+     }
     </style>
   </head>
   <body>
-    <input type="checkbox" id="visible" onclick="filter()"/>
-    <label for="visible">Visible</label>
-    <input type="checkbox" id="messier" onclick="filter()"/>
-    <label for="messier">Messier</label>
-    <input type="checkbox" id="named" onclick="filter()"/>
-    <label for="named">Named</label>
-    <input type="checkbox" id="nebula" onclick="filter()"/>
-    <label for="nebula">Nebula</label>
-    <input type="checkbox" id="nova" onclick="filter()"/>
-    <label for="nova">Nova</label>
-    <input type="checkbox" id="galaxy" onclick="filter()"/>
-    <label for="galaxy">Galaxy</label>
-    <input type="checkbox" id="galaxy_group" onclick="filter()"/>
-    <label for="galaxy_group">Galaxy Group</label>
-    <input type="checkbox" id="galaxy_triple" onclick="filter()"/>
-    <label for="galaxy_triple">Galaxy Triple</label>
-    <input type="checkbox" id="galaxy_pair" onclick="filter()"/>
-    <label for="galaxy_pair">Galaxy Pair</label>
-    <input type="checkbox" id="double_star" onclick="filter()"/>
-    <label for="double_star">Double Star</label>
+    <div class="header">
+      <div>
+        <input type="checkbox" id="visible" onclick="filter()"/>
+        <label for="visible">Visible</label>
+        <input type="checkbox" id="messier" onclick="filter()"/>
+        <label for="messier">Messier</label>
+        <input type="checkbox" id="named" onclick="filter()"/>
+        <label for="named">Named</label>
+        <input type="checkbox" id="nebula" onclick="filter()"/>
+        <label for="nebula">Nebula</label>
+        <input type="checkbox" id="nova" onclick="filter()"/>
+        <label for="nova">Nova</label>
+        <input type="checkbox" id="galaxy" onclick="filter()"/>
+        <label for="galaxy">Galaxy</label>
+        <input type="checkbox" id="galaxy_group" onclick="filter()"/>
+        <label for="galaxy_group">Galaxy Group</label>
+        <input type="checkbox" id="galaxy_triple" onclick="filter()"/>
+        <label for="galaxy_triple">Galaxy Triple</label>
+        <input type="checkbox" id="galaxy_pair" onclick="filter()"/>
+        <label for="galaxy_pair">Galaxy Pair</label>
+        <input type="checkbox" id="double_star" onclick="filter()"/>
+        <label for="double_star">Double Star</label>
+      </div>
+      <div id="time">
+        Local Sidereal Time: <span id="clock"></span>
+      </div>
+    </div>
 
     <div id="table"></div>
 
     <script src="/static/grid.umd.js"></script>
     <script>
      var grid;
+     var lst = new Date("2023-12-25T{{.LocalSiderealTime}}")     
+
+     function clock() {
+         lst.setSeconds(lst.getSeconds() + 1);
+         const hours = lst.getHours().toString().padStart(2, '0');
+         const minutes = lst.getMinutes().toString().padStart(2, '0');
+         const seconds = lst.getSeconds().toString().padStart(2, '0');
+         const timeString = `${hours}:${minutes}:${seconds}`;
+         document.getElementById('clock').textContent = timeString;
+     }
+
+     setInterval(clock, 1000);
 
      const filters = [
          {em: document.getElementById("messier"), param: "messier", f: function(checked) {return checked.toString()}},

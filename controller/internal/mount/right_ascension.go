@@ -12,7 +12,7 @@ import (
 
 const (
 	j1970         float64 = 2440587.5
-	trackingSpeed float64 = -100 / (24 * 60)
+	trackingSpeed float64 = -100.0 / (24.0 * 60.0)
 )
 
 type (

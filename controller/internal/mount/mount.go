@@ -153,7 +153,6 @@ func (m *Mount) Goto(ra func() (float64, time.Time), dec float64) error {
 	}
 
 	log.Printf("ha: %f, ra steps: %d, dec steps: %d, dec: %f", ha, rSteps, dSteps, dec)
-
 	return m.count(rSteps, dSteps)
 }
 
