@@ -38,10 +38,19 @@
       <div>{{.Visible}}</div>
     </div>
     <button {{if .Visible}}onclick="goto()"{{else}}onclick="alert('object not visible')"{{end}}>Goto</button>
+    <button {{if .Visible}}onclick="stop()"{{else}}onclick="alert('object not visible')"{{end}}>Stop</button>
   </body>
   <script>
    function goto() {
        fetch('/objects/{{.ID}}', {method: 'POST',}).then(
+           response => {
+               if (!response.ok) {
+                   throw new Error('Network response was not ok');
+               }
+       });
+   }
+   function stop() {
+       fetch('/ra', {method: 'POST', body: `{"hz": 0}`}).then(
            response => {
                if (!response.ok) {
                    throw new Error('Network response was not ok');

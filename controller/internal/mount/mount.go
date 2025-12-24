@@ -110,8 +110,10 @@ func (m *Mount) GetCoordinates() (float64, float64) {
 func (m *Mount) Move(axis string, hz float64) error {
 	switch axis {
 	case "ra":
+		m.ra.state = Ready
 		return m.ra.motor.Move(hz)
 	case "dec":
+		m.dec.state = Ready
 		return m.dec.motor.Move(hz)
 	}
 
