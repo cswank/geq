@@ -76,26 +76,26 @@ func New(device string, lat, lon float64, raPin, decPin int) (*Mount, error) {
 
 	var lock sync.Mutex
 
-	t := Mount{
+	m := Mount{
 		port:     port,
 		latitude: lat,
 		ra:       RA{lock: &lock, motor: raMotor, state: Idle, ha: 0, longitude: lon, gearRatio: 100},
-		dec:      Declination{dec: math.Pi / 2, lock: &lock, motor: decMotor, gearRatio: 136 / 16},
+		dec:      Declination{dec: math.Pi / 2, lock: &lock, motor: decMotor, gearRatio: 136.0 / 16.0},
 	}
 
 	if device != "" {
-		t.ra.line, err = gpiocdev.RequestLine("gpiochip0", raPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.ra.listen))
+		m.ra.line, err = gpiocdev.RequestLine("gpiochip0", raPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(m.ra.listen))
 		if err != nil {
 			return nil, err
 		}
 
-		t.dec.line, err = gpiocdev.RequestLine("gpiochip0", decPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(t.dec.listen))
+		m.dec.line, err = gpiocdev.RequestLine("gpiochip0", decPin, gpiocdev.WithPullUp, gpiocdev.WithBothEdges, gpiocdev.WithEventHandler(m.dec.listen))
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return &t, nil
+	return &m, nil
 }
 
 func (m *Mount) Coordinates(lat, lon float64) {

@@ -65,7 +65,7 @@ func (d *Declination) listen(evt gpiocdev.LineEvent) {
 		}
 	default:
 		d.state = Idle
-		if err := d.motor.Move(0 * d.direction); err != nil {
+		if err := d.motor.Move(0); err != nil {
 			log.Printf("error stopping motor: %s", err)
 		}
 	}
