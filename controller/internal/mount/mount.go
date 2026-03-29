@@ -183,7 +183,7 @@ func (m *Mount) count(ra, dec uint16) error {
 		DeclinationSteps: dec,
 	}
 
-	buf := make([]byte, binary.Size(msg))
+	buf := make([]byte, 8) // pad to 8 bytes to match firmware's read chunk size
 	_, err := binary.Encode(buf, binary.LittleEndian, msg)
 	if err != nil {
 		return err
