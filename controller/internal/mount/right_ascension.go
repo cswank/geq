@@ -34,10 +34,14 @@ type (
 )
 
 func (r *RA) slewing() bool {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	return r.state == Slew || r.state == SlowSlew
 }
 
 func (r *RA) slew(ha float64, t time.Time) (uint16, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	rads := ha - r.ha
 	if r.state == Tracking {
 		rads += degreesToRadians(15 * time.Since(r.start).Minutes() / 60)

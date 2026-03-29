@@ -183,11 +183,17 @@ func (m *Mount) count(ra, dec uint16) error {
 		DeclinationSteps: dec,
 	}
 
-	buf := make([]byte, 8)
+	buf := make([]byte, binary.Size(msg))
 	_, err := binary.Encode(buf, binary.LittleEndian, msg)
 	if err != nil {
 		return err
 	}
+
+	var xor uint8
+	for _, b := range buf[:len(buf)-1] {
+		xor ^= b
+	}
+	buf[len(buf)-1] = xor
 
 	_, err = m.port.Write(buf)
 	return err
@@ -216,7 +222,7 @@ func hoursToRadians(h float64) float64 {
 }
 
 func stepsToRadians(s uint16, gearRatio float64) float64 {
-	return (float64(s*2) / gearRatio) * (2 * math.Pi)
+	return (float64(s*2) / (gearRatio * 200)) * (2 * math.Pi)
 }
 
 func radiansToSteps(rads, gearRatio float64) uint16 {

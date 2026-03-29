@@ -24,7 +24,8 @@ pub const microzig_options = microzig.Options{
     .logFn = rp2xxx.uart.log,
 };
 
-var ra_steps: u16 = undefined;
+var ra_steps: u16 = 0;
+const msg_size = @sizeOf(message);
 
 var core1_stack: [1024]u32 = undefined;
 var buf: [256]u8 = .{0} ** 256;
@@ -66,12 +67,16 @@ fn recv() !message {
     try read();
 
     for (0.., buf) |x, element| {
-        if (x < 255 and element == 0x5 and buf[x + 1] == address) {
-            return std.mem.bytesToValue(message, buf[x .. x + 8]);
+        if (x + msg_size <= buf.len and element == 0x5 and buf[x + 1] == address) {
+            const raw = buf[x..][0..msg_size];
+            var xor: u8 = 0;
+            for (raw[0 .. msg_size - 1]) |b| xor ^= b;
+            if (xor != raw[msg_size - 1]) return error.BadCrc;
+            return std.mem.bytesToValue(message, raw);
         }
     }
 
-    return message{};
+    return error.NoMessage;
 }
 
 fn read() !void {
@@ -113,7 +118,7 @@ fn count(target: u16, output: gpio.Pin, index: gpio.Pin) void {
             state = 1 - state;
             if (state == 1) {
                 i += 1;
-                if (target - i == 100) {
+                if (target > 100 and target - i == 100) {
                     output.toggle(); //tell controller to slow down
                 }
             }

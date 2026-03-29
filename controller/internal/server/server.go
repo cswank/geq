@@ -102,11 +102,9 @@ func (s Server) Start() error {
 type handler func(w http.ResponseWriter, r *http.Request) error
 
 func handle(f handler) func(w http.ResponseWriter, r *http.Request) {
-	var err error
 	return func(w http.ResponseWriter, r *http.Request) {
-		err = f(w, r)
-		if err != nil {
-			log.Printf("error: %f", err)
+		if err := f(w, r); err != nil {
+			log.Printf("error: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
@@ -126,7 +124,7 @@ func (s Server) setup(w http.ResponseWriter, r *http.Request) error {
 	lat, lon := s.mount.GetCoordinates()
 	return s.set.ExecuteTemplate(w, "setup", setup{
 		SetTime:   ts.Year() < 2025, // no internet, need to manually set time
-		Time:      ts.Format("2006-01-02T04:05"),
+		Time:      ts.Format("2006-01-02T15:04"),
 		Latitude:  lat,
 		Longitude: lon,
 	})
@@ -141,12 +139,12 @@ func (s *Server) doSetup(w http.ResponseWriter, r *http.Request) error {
 	s.mount.Coordinates(p.Latitude, p.Longitude)
 
 	if time.Now().Year() < 2025 {
-		ts, err := time.Parse("2006-01-02T04:05", p.Time)
+		ts, err := time.Parse("2006-01-02T15:04", p.Time)
 		if err != nil {
 			return err
 		}
 		//date -s '2014-12-25 12:34:56'
-		args := []string{"--set", ts.Format("2006-01-01 04:05:06")}
+		args := []string{"--set", ts.Format("2006-01-02 15:04:05")}
 		if err := exec.Command("date", args...).Run(); err != nil {
 			return err
 		}

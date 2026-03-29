@@ -23,11 +23,15 @@ type (
 )
 
 func (d *Declination) slewing() bool {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	return d.state == Slew || d.state == SlowSlew
 }
 
 // TODO: make sure motor always moves back across local meridian when slewing
 func (d *Declination) slew(dec float64) (uint16, error) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	r := dec - d.dec
 
 	if r < 0 {
@@ -53,12 +57,12 @@ func (d *Declination) listen(evt gpiocdev.LineEvent) {
 	d.lock.Lock()
 
 	switch d.state {
-	case 0:
+	case Ready:
 		d.state++
 		if err := d.motor.Move(5 * d.direction); err != nil {
 			log.Printf("error starting motor")
 		}
-	case 1:
+	case Slew:
 		d.state++
 		if err := d.motor.Move(1 * d.direction); err != nil {
 			log.Printf("error slowing down motor: %s", err)
